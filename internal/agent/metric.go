@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/WPGe/go-yandex-advanced/internal/repository"
+	"github.com/go-resty/resty/v2"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -91,7 +92,10 @@ func sendMetrics(repo repository.MetricRepository, hookPath string) {
 
 	for _, metric := range allMetrics {
 		url := fmt.Sprintf("%s/%s/%s/%v", hookPath, metric.Type, metric.Name, metric.Value)
-		_, err := http.Post(url, "text/plain", nil)
+		req := resty.New().R()
+		req.Method = http.MethodPost
+		req.URL = url
+		_, err := req.Send()
 		if err != nil {
 			fmt.Println("Failed to send metric:", metric, "Error:", err)
 		}
