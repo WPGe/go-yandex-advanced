@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	parseFlags()
+
 	memStorage := storage.NewMemStorage()
 	repo := repository.MetricRepository(memStorage)
 
@@ -18,5 +20,5 @@ func main() {
 	r.Get("/value/{type}/{name}", handler.MetricGetHandler(repo))
 	r.Get("/", handler.MetricGetAllHandler(repo))
 
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe(flagRunAddr, r))
 }

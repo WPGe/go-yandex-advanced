@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func MetricAgent(repo repository.MetricRepository, hookPath string, stopCh <-chan struct{}) {
-	ticker := time.NewTicker(2 * time.Second)
-	sendTicker := time.NewTicker(10 * time.Second)
+func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterval int, pollInterval int, stopCh <-chan struct{}) {
+	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	sendTicker := time.NewTicker(time.Duration(reportInterval) * time.Second)
 
 	for {
 		select {
