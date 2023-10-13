@@ -26,16 +26,18 @@ func (m *MemStorage) AddMetric(name string, metric entity.Metric) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if existingMetric, ok := m.metrics[name]; ok {
-		if existingMetric.Type == entity.Counter {
-			existingMetric.Value = existingMetric.Value.(int64) + metric.Value.(int64)
-		} else {
-			existingMetric.Value = metric.Value
-		}
-		m.metrics[name] = existingMetric
-	} else {
+	existingMetric, ok := m.metrics[name]
+	if !ok {
 		m.metrics[name] = metric
+		return
 	}
+
+	if existingMetric.Type == entity.Counter {
+		existingMetric.Value = existingMetric.Value.(int64) + metric.Value.(int64)
+	} else {
+		existingMetric.Value = metric.Value
+	}
+	m.metrics[name] = existingMetric
 }
 
 func (m *MemStorage) GetMetric(name string) (entity.Metric, bool) {

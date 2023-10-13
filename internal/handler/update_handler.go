@@ -17,7 +17,7 @@ func MetricUpdateHandler(repo repository.MetricRepository) http.HandlerFunc {
 		metricValue := chi.URLParam(r, "value")
 
 		if metricType == "" || metricName == "" || metricValue == "" {
-			http.Error(w, "Некорректный формат URL", http.StatusNotFound)
+			http.Error(w, "Incorrect URL format", http.StatusNotFound)
 			return
 		}
 
@@ -29,11 +29,11 @@ func MetricUpdateHandler(repo repository.MetricRepository) http.HandlerFunc {
 		case string(entity.Counter):
 			typedMetricValue, err = strconv.ParseInt(metricValue, 10, 64)
 		default:
-			http.Error(w, "Некорректный тип метрики", http.StatusBadRequest)
+			http.Error(w, "Incorrect metric type", http.StatusBadRequest)
 			return
 		}
 		if err != nil {
-			http.Error(w, "Некорректное значение", http.StatusBadRequest)
+			http.Error(w, "Incorrect value", http.StatusBadRequest)
 			return
 		}
 
@@ -55,19 +55,19 @@ func MetricGetHandler(repo repository.MetricRepository) http.HandlerFunc {
 
 		resultMetric, ok := repo.GetMetric(metricName)
 		if !ok {
-			http.Error(w, "Метрика не найдена", http.StatusNotFound)
+			http.Error(w, "Metric not found", http.StatusNotFound)
 			return
 		}
 
 		switch metricType {
 		case string(entity.Gauge):
 			if _, err := io.WriteString(w, fmt.Sprintf("%g", resultMetric.Value)); err != nil {
-				http.Error(w, "Ошибка вывода значения", http.StatusBadRequest)
+				http.Error(w, "Output error", http.StatusBadRequest)
 				return
 			}
 		case string(entity.Counter):
 			if _, err := io.WriteString(w, fmt.Sprintf("%d", resultMetric.Value)); err != nil {
-				http.Error(w, "Ошибка вывода значения", http.StatusBadRequest)
+				http.Error(w, "Output error", http.StatusBadRequest)
 				return
 			}
 		}
@@ -84,12 +84,12 @@ func MetricGetAllHandler(repo repository.MetricRepository) http.HandlerFunc {
 			switch metric.Type {
 			case entity.Gauge:
 				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%g}}\n", metric.Name, metric.Value)); err != nil {
-					http.Error(w, "Ошибка вывода", http.StatusBadRequest)
+					http.Error(w, "Output error", http.StatusBadRequest)
 					return
 				}
 			case entity.Counter:
 				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%d}}\n", metric.Name, metric.Value)); err != nil {
-					http.Error(w, "Ошибка вывода", http.StatusBadRequest)
+					http.Error(w, "Output error", http.StatusBadRequest)
 					return
 				}
 			}

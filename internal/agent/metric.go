@@ -11,14 +11,17 @@ import (
 	"time"
 )
 
-func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterval int, pollInterval int, stopCh <-chan struct{}) {
-	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
-	sendTicker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
+	ticker := time.NewTicker(pollInterval * time.Second)
+	sendTicker := time.NewTicker(reportInterval * time.Second)
+
+	gaugeRuntimeMetrics := map[string]float64{}
+	counterRuntimeMetrics := map[string]int64{}
 
 	for {
 		select {
 		case <-ticker.C:
-			gaugeRuntimeMetrics := collectGaugeRuntimeMetrics()
+			collectGaugeRuntimeMetrics(&gaugeRuntimeMetrics)
 			for name, value := range gaugeRuntimeMetrics {
 				metric := entity.Metric{
 					Type:  entity.Gauge,
@@ -28,7 +31,8 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 				repo.AddMetric(name, metric)
 			}
 
-			counterRuntimeMetrics := collectCounterRuntimeMetrics()
+			collectCounterRuntimeMetrics(&counterRuntimeMetrics)
+		case <-sendTicker.C:
 			for name, value := range counterRuntimeMetrics {
 				metric := entity.Metric{
 					Type:  entity.Counter,
@@ -37,53 +41,58 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 				}
 				repo.AddMetric(name, metric)
 			}
-		case <-sendTicker.C:
+			clearCounterRuntimeMetrics(&counterRuntimeMetrics)
+
 			sendMetrics(repo, hookPath)
 			repo.ClearMetrics()
+
 		case <-stopCh:
 			return
 		}
 	}
 }
 
-func collectGaugeRuntimeMetrics() map[string]float64 {
+func collectGaugeRuntimeMetrics(myMap *map[string]float64) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	return map[string]float64{
-		"Alloc":         float64(m.Alloc),
-		"BuckHashSys":   float64(m.BuckHashSys),
-		"Frees":         float64(m.Frees),
-		"GCCPUFraction": m.GCCPUFraction,
-		"GCSys":         float64(m.GCSys),
-		"HeapAlloc":     float64(m.HeapAlloc),
-		"HeapIdle":      float64(m.HeapIdle),
-		"HeapInuse":     float64(m.HeapInuse),
-		"HeapObjects":   float64(m.HeapObjects),
-		"HeapReleased":  float64(m.HeapReleased),
-		"HeapSys":       float64(m.HeapSys),
-		"LastGC":        float64(m.LastGC),
-		"Lookups":       float64(m.Lookups),
-		"MCacheInuse":   float64(m.MCacheInuse),
-		"MCacheSys":     float64(m.MCacheSys),
-		"MSpanInuse":    float64(m.MSpanInuse),
-		"MSpanSys":      float64(m.MSpanSys),
-		"Mallocs":       float64(m.Mallocs),
-		"NextGC":        float64(m.NextGC),
-		"NumForcedGC":   float64(m.NumForcedGC),
-		"NumGC":         float64(m.NumGC),
-		"OtherSys":      float64(m.OtherSys),
-		"PauseTotalNs":  float64(m.PauseTotalNs),
-		"StackInuse":    float64(m.StackInuse),
-		"StackSys":      float64(m.StackSys),
-		"Sys":           float64(m.Sys),
-		"TotalAlloc":    float64(m.TotalAlloc),
-		"RandomValue":   rand.Float64(),
-	}
+
+	(*myMap)["Alloc"] = float64(m.Alloc)
+	(*myMap)["BuckHashSys"] = float64(m.BuckHashSys)
+	(*myMap)["Frees"] = float64(m.Frees)
+	(*myMap)["GCCPUFraction"] = m.GCCPUFraction
+	(*myMap)["GCSys"] = float64(m.GCSys)
+	(*myMap)["HeapAlloc"] = float64(m.HeapAlloc)
+	(*myMap)["HeapIdle"] = float64(m.HeapIdle)
+	(*myMap)["HeapInuse"] = float64(m.HeapInuse)
+	(*myMap)["HeapObjects"] = float64(m.HeapObjects)
+	(*myMap)["HeapReleased"] = float64(m.HeapReleased)
+	(*myMap)["HeapSys"] = float64(m.HeapSys)
+	(*myMap)["LastGC"] = float64(m.LastGC)
+	(*myMap)["Lookups"] = float64(m.Lookups)
+	(*myMap)["MCacheInuse"] = float64(m.MCacheInuse)
+	(*myMap)["MCacheSys"] = float64(m.MCacheSys)
+	(*myMap)["MSpanInuse"] = float64(m.MSpanInuse)
+	(*myMap)["MSpanSys"] = float64(m.MSpanSys)
+	(*myMap)["Mallocs"] = float64(m.Mallocs)
+	(*myMap)["NextGC"] = float64(m.NextGC)
+	(*myMap)["NumForcedGC"] = float64(m.NumForcedGC)
+	(*myMap)["NumGC"] = float64(m.NumGC)
+	(*myMap)["OtherSys"] = float64(m.OtherSys)
+	(*myMap)["PauseTotalNs"] = float64(m.PauseTotalNs)
+	(*myMap)["StackInuse"] = float64(m.StackInuse)
+	(*myMap)["StackSys"] = float64(m.StackSys)
+	(*myMap)["Sys"] = float64(m.Sys)
+	(*myMap)["TotalAlloc"] = float64(m.TotalAlloc)
+	(*myMap)["RandomValue"] = rand.Float64()
 }
 
-func collectCounterRuntimeMetrics() map[string]int64 {
-	return map[string]int64{
-		"PollCount": 1,
+func collectCounterRuntimeMetrics(myMap *map[string]int64) {
+	(*myMap)["PollCount"]++
+}
+
+func clearCounterRuntimeMetrics(myMap *map[string]int64) {
+	for key := range *myMap {
+		delete(*myMap, key)
 	}
 }
 
@@ -95,9 +104,12 @@ func sendMetrics(repo repository.MetricRepository, hookPath string) {
 		req := resty.New().R()
 		req.Method = http.MethodPost
 		req.URL = url
-		_, err := req.Send()
+		res, err := req.Send()
 		if err != nil {
 			fmt.Println("Failed to send metric:", metric, "Error:", err)
+		}
+		if res.StatusCode() != http.StatusOK {
+			fmt.Println("Failed to send metric: ", metric, "Wrong response code: ", res.StatusCode())
 		}
 	}
 }
