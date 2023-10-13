@@ -6,6 +6,7 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -43,7 +44,10 @@ func MetricUpdateHandler(repo repository.MetricRepository) http.HandlerFunc {
 			Value: typedMetricValue,
 		}
 
-		repo.AddMetric(metricName, metric)
+		err = repo.AddMetric(metricName, metric)
+		if err != nil {
+			log.Fatal(err)
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -53,10 +57,13 @@ func MetricGetHandler(repo repository.MetricRepository) http.HandlerFunc {
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
 
-		resultMetric, ok := repo.GetMetric(metricName)
+		resultMetric, ok, err := repo.GetMetric(metricName)
 		if !ok {
 			http.Error(w, "Metric not found", http.StatusNotFound)
 			return
+		}
+		if err != nil {
+			log.Fatal(err)
 		}
 
 		switch metricType {
@@ -78,7 +85,10 @@ func MetricGetHandler(repo repository.MetricRepository) http.HandlerFunc {
 
 func MetricGetAllHandler(repo repository.MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resultMetrics := repo.GetAllMetrics()
+		resultMetrics, err := repo.GetAllMetrics()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		for _, metric := range resultMetrics {
 			switch metric.Type {

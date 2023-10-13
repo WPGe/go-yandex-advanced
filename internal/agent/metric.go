@@ -5,6 +5,7 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/WPGe/go-yandex-advanced/internal/repository"
 	"github.com/go-resty/resty/v2"
+	"log"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -28,7 +29,10 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 					Name:  name,
 					Value: value,
 				}
-				repo.AddMetric(name, metric)
+				err := repo.AddMetric(name, metric)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 
 			collectCounterRuntimeMetrics(&counterRuntimeMetrics)
@@ -39,12 +43,18 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 					Name:  name,
 					Value: value,
 				}
-				repo.AddMetric(name, metric)
+				err := repo.AddMetric(name, metric)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 			clearCounterRuntimeMetrics(&counterRuntimeMetrics)
 
 			sendMetrics(repo, hookPath)
-			repo.ClearMetrics()
+			err := repo.ClearMetrics()
+			if err != nil {
+				log.Fatal(err)
+			}
 
 		case <-stopCh:
 			return
@@ -97,7 +107,10 @@ func clearCounterRuntimeMetrics(myMap *map[string]int64) {
 }
 
 func sendMetrics(repo repository.MetricRepository, hookPath string) {
-	allMetrics := repo.GetAllMetrics()
+	allMetrics, err := repo.GetAllMetrics()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for _, metric := range allMetrics {
 		url := fmt.Sprintf("%s/%s/%s/%v", hookPath, metric.Type, metric.Name, metric.Value)

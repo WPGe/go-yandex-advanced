@@ -22,14 +22,14 @@ func NewMemStorageWithMetrics(initialMetrics map[string]entity.Metric) *MemStora
 	}
 }
 
-func (m *MemStorage) AddMetric(name string, metric entity.Metric) {
+func (m *MemStorage) AddMetric(name string, metric entity.Metric) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	existingMetric, ok := m.metrics[name]
 	if !ok {
 		m.metrics[name] = metric
-		return
+		return nil
 	}
 
 	if existingMetric.Type == entity.Counter {
@@ -38,23 +38,27 @@ func (m *MemStorage) AddMetric(name string, metric entity.Metric) {
 		existingMetric.Value = metric.Value
 	}
 	m.metrics[name] = existingMetric
+
+	return nil
 }
 
-func (m *MemStorage) GetMetric(name string) (entity.Metric, bool) {
+func (m *MemStorage) GetMetric(name string) (entity.Metric, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	metric, ok := m.metrics[name]
-	return metric, ok
+	return metric, ok, nil
 }
 
-func (m *MemStorage) GetAllMetrics() map[string]entity.Metric {
+func (m *MemStorage) GetAllMetrics() (map[string]entity.Metric, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.metrics
+	return m.metrics, nil
 }
 
-func (m *MemStorage) ClearMetrics() {
+func (m *MemStorage) ClearMetrics() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.metrics = make(map[string]entity.Metric)
+
+	return nil
 }
