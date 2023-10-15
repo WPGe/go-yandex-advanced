@@ -16,40 +16,12 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 	ticker := time.NewTicker(pollInterval * time.Second)
 	sendTicker := time.NewTicker(reportInterval * time.Second)
 
-	gaugeRuntimeMetrics := map[string]float64{}
-	counterRuntimeMetrics := map[string]int64{}
-
 	for {
 		select {
 		case <-ticker.C:
-			collectGaugeRuntimeMetrics(&gaugeRuntimeMetrics)
-			for name, value := range gaugeRuntimeMetrics {
-				metric := entity.Metric{
-					Type:  entity.Gauge,
-					Name:  name,
-					Value: value,
-				}
-				err := repo.AddMetric(name, metric)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-
-			collectCounterRuntimeMetrics(&counterRuntimeMetrics)
+			collectGaugeRuntimeMetrics(repo)
+			increasePollIteration(repo)
 		case <-sendTicker.C:
-			for name, value := range counterRuntimeMetrics {
-				metric := entity.Metric{
-					Type:  entity.Counter,
-					Name:  name,
-					Value: value,
-				}
-				err := repo.AddMetric(name, metric)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-			clearCounterRuntimeMetrics(&counterRuntimeMetrics)
-
 			sendMetrics(repo, hookPath)
 			err := repo.ClearMetrics()
 			if err != nil {
@@ -62,48 +34,68 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 	}
 }
 
-func collectGaugeRuntimeMetrics(myMap *map[string]float64) {
+func collectGaugeRuntimeMetrics(repo repository.MetricRepository) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	(*myMap)["Alloc"] = float64(m.Alloc)
-	(*myMap)["BuckHashSys"] = float64(m.BuckHashSys)
-	(*myMap)["Frees"] = float64(m.Frees)
-	(*myMap)["GCCPUFraction"] = m.GCCPUFraction
-	(*myMap)["GCSys"] = float64(m.GCSys)
-	(*myMap)["HeapAlloc"] = float64(m.HeapAlloc)
-	(*myMap)["HeapIdle"] = float64(m.HeapIdle)
-	(*myMap)["HeapInuse"] = float64(m.HeapInuse)
-	(*myMap)["HeapObjects"] = float64(m.HeapObjects)
-	(*myMap)["HeapReleased"] = float64(m.HeapReleased)
-	(*myMap)["HeapSys"] = float64(m.HeapSys)
-	(*myMap)["LastGC"] = float64(m.LastGC)
-	(*myMap)["Lookups"] = float64(m.Lookups)
-	(*myMap)["MCacheInuse"] = float64(m.MCacheInuse)
-	(*myMap)["MCacheSys"] = float64(m.MCacheSys)
-	(*myMap)["MSpanInuse"] = float64(m.MSpanInuse)
-	(*myMap)["MSpanSys"] = float64(m.MSpanSys)
-	(*myMap)["Mallocs"] = float64(m.Mallocs)
-	(*myMap)["NextGC"] = float64(m.NextGC)
-	(*myMap)["NumForcedGC"] = float64(m.NumForcedGC)
-	(*myMap)["NumGC"] = float64(m.NumGC)
-	(*myMap)["OtherSys"] = float64(m.OtherSys)
-	(*myMap)["PauseTotalNs"] = float64(m.PauseTotalNs)
-	(*myMap)["StackInuse"] = float64(m.StackInuse)
-	(*myMap)["StackSys"] = float64(m.StackSys)
-	(*myMap)["Sys"] = float64(m.Sys)
-	(*myMap)["TotalAlloc"] = float64(m.TotalAlloc)
-	(*myMap)["RandomValue"] = rand.Float64()
+	addGaugeMetricToStorage("Alloc", float64(m.Alloc), repo)
+	addGaugeMetricToStorage("BuckHashSys", float64(m.BuckHashSys), repo)
+	addGaugeMetricToStorage("Frees", float64(m.Frees), repo)
+	addGaugeMetricToStorage("GCCPUFraction", float64(m.GCCPUFraction), repo)
+	addGaugeMetricToStorage("GCSys", float64(m.GCSys), repo)
+	addGaugeMetricToStorage("HeapAlloc", float64(m.HeapAlloc), repo)
+	addGaugeMetricToStorage("HeapIdle", float64(m.HeapIdle), repo)
+	addGaugeMetricToStorage("HeapInuse", float64(m.HeapInuse), repo)
+	addGaugeMetricToStorage("HeapObjects", float64(m.HeapObjects), repo)
+	addGaugeMetricToStorage("HeapReleased", float64(m.HeapReleased), repo)
+	addGaugeMetricToStorage("HeapSys", float64(m.HeapSys), repo)
+	addGaugeMetricToStorage("LastGC", float64(m.LastGC), repo)
+	addGaugeMetricToStorage("Lookups", float64(m.Lookups), repo)
+	addGaugeMetricToStorage("MCacheInuse", float64(m.MCacheInuse), repo)
+	addGaugeMetricToStorage("MCacheSys", float64(m.MCacheSys), repo)
+	addGaugeMetricToStorage("MSpanInuse", float64(m.MSpanInuse), repo)
+	addGaugeMetricToStorage("MSpanSys", float64(m.MSpanSys), repo)
+	addGaugeMetricToStorage("Mallocs", float64(m.Mallocs), repo)
+	addGaugeMetricToStorage("NextGC", float64(m.NextGC), repo)
+	addGaugeMetricToStorage("NumForcedGC", float64(m.NumForcedGC), repo)
+	addGaugeMetricToStorage("NumGC", float64(m.NumGC), repo)
+	addGaugeMetricToStorage("OtherSys", float64(m.OtherSys), repo)
+	addGaugeMetricToStorage("PauseTotalNs", float64(m.PauseTotalNs), repo)
+	addGaugeMetricToStorage("StackInuse", float64(m.StackInuse), repo)
+	addGaugeMetricToStorage("StackSys", float64(m.StackSys), repo)
+	addGaugeMetricToStorage("Sys", float64(m.Sys), repo)
+	addGaugeMetricToStorage("TotalAlloc", float64(m.TotalAlloc), repo)
+	addGaugeMetricToStorage("RandomValue", rand.Float64(), repo)
 }
 
-func collectCounterRuntimeMetrics(myMap *map[string]int64) {
-	(*myMap)["PollCount"]++
-}
-
-func clearCounterRuntimeMetrics(myMap *map[string]int64) {
-	for key := range *myMap {
-		delete(*myMap, key)
+func addGaugeMetricToStorage(name string, value float64, repo repository.MetricRepository) {
+	metric := entity.Metric{
+		Type:  entity.Gauge,
+		Name:  name,
+		Value: value,
 	}
+
+	err := repo.AddMetric(name, metric)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func addCounterMetricToStorage(name string, value int64, repo repository.MetricRepository) {
+	metric := entity.Metric{
+		Type:  entity.Counter,
+		Name:  name,
+		Value: value,
+	}
+
+	err := repo.AddMetric(name, metric)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func increasePollIteration(repo repository.MetricRepository) {
+	addCounterMetricToStorage("PollCount", 1, repo)
 }
 
 func sendMetrics(repo repository.MetricRepository, hookPath string) {

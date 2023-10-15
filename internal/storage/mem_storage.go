@@ -6,7 +6,7 @@ import (
 )
 
 type MemStorage struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	metrics map[string]entity.Metric
 }
 
@@ -43,15 +43,15 @@ func (m *MemStorage) AddMetric(name string, metric entity.Metric) error {
 }
 
 func (m *MemStorage) GetMetric(name string) (entity.Metric, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	metric, ok := m.metrics[name]
 	return metric, ok, nil
 }
 
 func (m *MemStorage) GetAllMetrics() (map[string]entity.Metric, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.metrics, nil
 }
 
