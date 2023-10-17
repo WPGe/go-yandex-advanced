@@ -14,6 +14,5 @@ func main() {
 	repo := repository.MetricRepository(memStorage)
 
 	stopCh := make(chan struct{})
-	go agent.MetricAgent(repo, "http://"+flagRunAddr+"/update", time.Duration(flagReportInterval), time.Duration(flagPollInterval), stopCh)
-	select {}
+	agent.MetricAgent(repo, "http://"+flagRunAddr+"/update", time.Duration(flagReportInterval), time.Duration(flagPollInterval), stopCh)
 }
