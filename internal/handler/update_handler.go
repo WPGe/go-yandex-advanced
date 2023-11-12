@@ -3,15 +3,16 @@ package handler
 import (
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/repository"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
-func MetricUpdateHandler(repo repository.MetricRepository) http.HandlerFunc {
+func MetricUpdateHandler(repo MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
@@ -52,7 +53,7 @@ func MetricUpdateHandler(repo repository.MetricRepository) http.HandlerFunc {
 	}
 }
 
-func MetricGetHandler(repo repository.MetricRepository) http.HandlerFunc {
+func MetricGetHandler(repo MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
@@ -83,7 +84,7 @@ func MetricGetHandler(repo repository.MetricRepository) http.HandlerFunc {
 	}
 }
 
-func MetricGetAllHandler(repo repository.MetricRepository) http.HandlerFunc {
+func MetricGetAllHandler(repo MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resultMetrics, err := repo.GetAllMetrics()
 		if err != nil {
@@ -105,5 +106,32 @@ func MetricGetAllHandler(repo repository.MetricRepository) http.HandlerFunc {
 			}
 		}
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func WithLogging(h http.HandlerFunc, sugar zap.SugaredLogger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		responseData := &ResponseData{
+			status: 0,
+			size:   0,
+		}
+		lw := LoggingResponseWriter{
+			ResponseWriter: w,
+			ResponseData:   responseData,
+		}
+
+		h.ServeHTTP(&lw, r)
+
+		duration := time.Since(start)
+
+		sugar.Infoln(
+			"uri", r.RequestURI,
+			"method", r.Method,
+			"duration", duration,
+			"status", responseData.status,
+			"size", responseData.size,
+		)
 	}
 }

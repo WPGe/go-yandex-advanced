@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
-	"github.com/WPGe/go-yandex-advanced/internal/repository"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 )
+
+var sugar zap.SugaredLogger
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -25,15 +27,27 @@ func main() {
 		cancel()
 	}()
 
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
+
+	sugar = *logger.Sugar()
+
 	parseFlags()
 
 	memStorage := storage.NewMemStorage()
-	repo := repository.MetricRepository(memStorage)
 
 	r := chi.NewRouter()
-	r.Post("/update/{type}/{name}/{value}", handler.MetricUpdateHandler(repo))
-	r.Get("/value/{type}/{name}", handler.MetricGetHandler(repo))
-	r.Get("/", handler.MetricGetAllHandler(repo))
+	r.Post("/update/{type}/{name}/{value}", handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar))
+	r.Get("/value/{type}/{name}", handler.WithLogging(handler.MetricGetHandler(memStorage), sugar))
+	r.Get("/", handler.WithLogging(handler.MetricGetAllHandler(memStorage), sugar))
+
+	sugar.Infow(
+		"Starting server",
+		"addr", flagRunAddr,
+	)
 
 	httpServer := &http.Server{
 		Addr:    flagRunAddr,
@@ -50,6 +64,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
+		sugar.Fatalw(err.Error(), "event", "start server")
 		fmt.Printf("exit reason: %s \n", err)
 	}
 }
