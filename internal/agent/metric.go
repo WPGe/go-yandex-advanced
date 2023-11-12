@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/repository"
+	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
+func MetricAgent(repo handler.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(pollInterval * time.Second)
 	sendTicker := time.NewTicker(reportInterval * time.Second)
 
@@ -34,7 +34,7 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 	}
 }
 
-func collectGaugeRuntimeMetrics(repo repository.MetricRepository) {
+func collectGaugeRuntimeMetrics(repo handler.MetricRepository) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -68,7 +68,7 @@ func collectGaugeRuntimeMetrics(repo repository.MetricRepository) {
 	addGaugeMetricToStorage("RandomValue", rand.Float64(), repo)
 }
 
-func addGaugeMetricToStorage(name string, value float64, repo repository.MetricRepository) {
+func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepository) {
 	metric := entity.Metric{
 		Type:  entity.Gauge,
 		Name:  name,
@@ -81,7 +81,7 @@ func addGaugeMetricToStorage(name string, value float64, repo repository.MetricR
 	}
 }
 
-func addCounterMetricToStorage(name string, value int64, repo repository.MetricRepository) {
+func addCounterMetricToStorage(name string, value int64, repo handler.MetricRepository) {
 	metric := entity.Metric{
 		Type:  entity.Counter,
 		Name:  name,
@@ -94,11 +94,11 @@ func addCounterMetricToStorage(name string, value int64, repo repository.MetricR
 	}
 }
 
-func increasePollIteration(repo repository.MetricRepository) {
+func increasePollIteration(repo handler.MetricRepository) {
 	addCounterMetricToStorage("PollCount", 1, repo)
 }
 
-func sendMetrics(repo repository.MetricRepository, hookPath string) {
+func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	allMetrics, err := repo.GetAllMetrics()
 	if err != nil {
 		log.Fatal(err)

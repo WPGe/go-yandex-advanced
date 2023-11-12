@@ -1,4 +1,4 @@
-package repository
+package handler
 
 import (
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
