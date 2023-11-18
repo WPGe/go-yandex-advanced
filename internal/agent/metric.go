@@ -70,9 +70,9 @@ func collectGaugeRuntimeMetrics(repo handler.MetricRepository) {
 
 func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepository) {
 	metric := entity.Metric{
-		Type:  entity.Gauge,
-		Name:  name,
-		Value: value,
+		MType: entity.Gauge,
+		ID:    name,
+		Value: &value,
 	}
 
 	err := repo.AddMetric(name, metric)
@@ -83,9 +83,9 @@ func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepo
 
 func addCounterMetricToStorage(name string, value int64, repo handler.MetricRepository) {
 	metric := entity.Metric{
-		Type:  entity.Counter,
-		Name:  name,
-		Value: value,
+		MType: entity.Counter,
+		ID:    name,
+		Delta: &value,
 	}
 
 	err := repo.AddMetric(name, metric)
@@ -105,10 +105,13 @@ func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	}
 
 	for _, metric := range allMetrics {
-		url := fmt.Sprintf("%s/%s/%s/%v", hookPath, metric.Type, metric.Name, metric.Value)
+		url := fmt.Sprintf("%s/", hookPath)
 		req := resty.New().R()
 		req.Method = http.MethodPost
 		req.URL = url
+		req.Header.Set("Content-Type", "application/json")
+		req.SetBody(metric)
+
 		res, err := req.Send()
 		if err != nil {
 			fmt.Println("Failed to send metric:", metric, "Error:", err)
