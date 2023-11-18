@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"sync"
 )
@@ -22,30 +23,40 @@ func NewMemStorageWithMetrics(initialMetrics map[string]entity.Metric) *MemStora
 	}
 }
 
-func (m *MemStorage) AddMetric(name string, metric entity.Metric) error {
+func (m *MemStorage) AddMetric(id string, metric entity.Metric) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	existingMetric, ok := m.metrics[name]
+	existingMetric, ok := m.metrics[id]
 	if !ok {
-		m.metrics[name] = metric
+		m.metrics[id] = metric
 		return nil
 	}
 
-	if existingMetric.Type == entity.Counter {
-		existingMetric.Value = existingMetric.Value.(int64) + metric.Value.(int64)
-	} else {
+	if existingMetric.MType == entity.Gauge {
 		existingMetric.Value = metric.Value
+		m.metrics[id] = existingMetric
+		return nil
 	}
-	m.metrics[name] = existingMetric
+
+	if metric.Delta == nil {
+		return errors.New("delta cannot be nil for counter metric")
+	}
+
+	if existingMetric.Delta == nil {
+		existingMetric.Delta = new(int64)
+	}
+
+	*existingMetric.Delta += *metric.Delta
+	m.metrics[id] = existingMetric
 
 	return nil
 }
 
-func (m *MemStorage) GetMetric(name string) (entity.Metric, bool, error) {
+func (m *MemStorage) GetMetric(id string) (entity.Metric, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	metric, ok := m.metrics[name]
+	metric, ok := m.metrics[id]
 	return metric, ok, nil
 }
 
