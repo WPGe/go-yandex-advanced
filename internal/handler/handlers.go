@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -68,6 +69,8 @@ func MetricUpdateHandler(repo MetricRepository) http.HandlerFunc {
 
 func MetricGetHandler(repo MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+
 		metricType := chi.URLParam(r, "type")
 		metricName := chi.URLParam(r, "name")
 
@@ -92,7 +95,6 @@ func MetricGetHandler(repo MetricRepository) http.HandlerFunc {
 				return
 			}
 		}
-
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -126,6 +128,8 @@ func MetricPostHandler(repo MetricRepository) http.HandlerFunc {
 
 func MetricGetAllHandler(repo MetricRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+
 		resultMetrics, err := repo.GetAllMetrics()
 		if err != nil {
 			log.Fatal(err)
@@ -173,5 +177,46 @@ func WithLogging(h http.HandlerFunc, sugar zap.SugaredLogger) http.HandlerFunc {
 			"status", responseData.status,
 			"size", responseData.size,
 		)
+	}
+}
+
+func WithGzip(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ow := w
+
+		acceptEncoding := r.Header.Get("Accept-Encoding")
+		supportsGzip := strings.Contains(acceptEncoding, "gzip")
+		acceptType := r.Header.Get("Accept")
+		supportType := strings.Contains(acceptType, "application/json") || strings.Contains(acceptType, "html/text") || strings.Contains(acceptType, "text/html")
+		if supportsGzip && supportType {
+			w.Header().Set("Content-Encoding", "gzip")
+			cw := newCompressWriter(w)
+			ow = cw
+			defer func(cw *compressWriter) {
+				err := cw.Close()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}(cw)
+		}
+
+		contentEncoding := r.Header.Get("Content-Encoding")
+		sendsGzip := strings.Contains(contentEncoding, "gzip")
+		if sendsGzip {
+			cr, err := newCompressReader(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			r.Body = cr
+			defer func(cr *compressReader) {
+				err := cr.Close()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}(cr)
+		}
+
+		h.ServeHTTP(ow, r)
 	}
 }

@@ -45,11 +45,11 @@ func main() {
 	memStorage := storage.NewMemStorage()
 
 	r := chi.NewRouter()
-	r.Post("/update/", handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar))
-	r.Post("/update/{type}/{name}/{value}", handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar))
-	r.Get("/value/{type}/{name}", handler.WithLogging(handler.MetricGetHandler(memStorage), sugar))
-	r.Post("/value/", handler.WithLogging(handler.MetricPostHandler(memStorage), sugar))
-	r.Get("/", handler.WithLogging(handler.MetricGetAllHandler(memStorage), sugar))
+	r.Post("/update/", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar)))
+	r.Post("/update/{type}/{name}/{value}", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar)))
+	r.Get("/value/{type}/{name}", handler.WithGzip(handler.WithLogging(handler.MetricGetHandler(memStorage), sugar)))
+	r.Post("/value/", handler.WithGzip(handler.WithLogging(handler.MetricPostHandler(memStorage), sugar)))
+	r.Get("/", handler.WithGzip(handler.WithLogging(handler.MetricGetAllHandler(memStorage), sugar)))
 
 	sugar.Infow(
 		"Starting server",

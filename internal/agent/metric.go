@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
@@ -105,12 +108,24 @@ func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	}
 
 	for _, metric := range allMetrics {
+		jsonMetric, err := json.Marshal(metric)
+		if err != nil {
+			fmt.Println("Failed to encode metric:", metric, "Error:", err)
+		}
+
+		buf := bytes.NewBuffer(nil)
+		zb := gzip.NewWriter(buf)
+		_, err = zb.Write(jsonMetric)
+		if err != nil {
+			fmt.Println("Failed to gzip metric:", metric, "Error:", err)
+		}
+
 		url := fmt.Sprintf("%s/", hookPath)
 		req := resty.New().R()
 		req.Method = http.MethodPost
 		req.URL = url
 		req.Header.Set("Content-Type", "application/json")
-		req.SetBody(metric)
+		req.SetBody(buf)
 
 		res, err := req.Send()
 		if err != nil {
