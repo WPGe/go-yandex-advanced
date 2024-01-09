@@ -1,8 +1,11 @@
 package storage
 
 import (
-	"errors"
+	"encoding/json"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/pkg/errors"
+	"log"
+	"os"
 	"sync"
 )
 
@@ -21,6 +24,38 @@ func NewMemStorageWithMetrics(initialMetrics map[string]entity.Metric) *MemStora
 	return &MemStorage{
 		metrics: initialMetrics,
 	}
+}
+
+func NewMemStorageFromFile(fileStoragePath string) *MemStorage {
+	file, err := os.OpenFile(fileStoragePath, os.O_RDONLY|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatalf("%+v", errors.Wrap(err, "failed to open file"))
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}(file)
+
+	// Получаем размер файла
+	fileStat, err := file.Stat()
+	if err != nil {
+		log.Fatalf("%+v", errors.Wrap(err, "failed to get file stats"))
+	}
+
+	if fileStat.Size() == 0 {
+		// Файл пустой, возвращаем MemStorage с пустым map
+		return NewMemStorageWithMetrics(make(map[string]entity.Metric))
+	}
+
+	decoder := json.NewDecoder(file)
+	initialMetrics := map[string]entity.Metric{}
+	if err := decoder.Decode(&initialMetrics); err != nil {
+		log.Fatalf("%+v", errors.Wrap(err, "failed to decode metrics"))
+	}
+
+	return NewMemStorageWithMetrics(initialMetrics)
 }
 
 func (m *MemStorage) AddMetric(id string, metric entity.Metric) error {

@@ -6,6 +6,7 @@ type (
 	ResponseData struct {
 		status int
 		size   int
+		body   string
 	}
 	LoggingResponseWriter struct {
 		http.ResponseWriter
@@ -16,6 +17,7 @@ type (
 func (r *LoggingResponseWriter) Write(b []byte) (int, error) {
 	size, err := r.ResponseWriter.Write(b)
 	r.ResponseData.size += size
+	r.ResponseData.body = string(b) // Сохраняем тело ответа
 	return size, err
 }
 

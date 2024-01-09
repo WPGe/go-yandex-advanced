@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/WPGe/go-yandex-advanced/internal/agent"
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -11,7 +12,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 )
 
 var sugar zap.SugaredLogger
@@ -42,7 +45,13 @@ func main() {
 
 	parseFlags()
 
-	memStorage := storage.NewMemStorage()
+	var memStorage *storage.MemStorage
+	memStorage = storage.NewMemStorage()
+	if flagRestore {
+		memStorage = storage.NewMemStorageFromFile(filepath.Join(rootDir, flagFileStoragePath))
+	} else {
+		memStorage = storage.NewMemStorage()
+	}
 
 	r := chi.NewRouter()
 	r.Post("/update/", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(memStorage), sugar)))
@@ -68,6 +77,10 @@ func main() {
 	g.Go(func() error {
 		<-gCtx.Done()
 		return httpServer.Shutdown(context.Background())
+	})
+	g.Go(func() error {
+		// Запускаем агент с использованием контекста
+		return agent.SaveMetricsInFileAgent(memStorage, filepath.Join(rootDir, flagFileStoragePath), time.Duration(flagStoreInterval), gCtx)
 	})
 
 	if err := g.Wait(); err != nil {

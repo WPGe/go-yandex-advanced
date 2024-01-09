@@ -160,6 +160,7 @@ func WithLogging(h http.HandlerFunc, sugar zap.SugaredLogger) http.HandlerFunc {
 		responseData := &ResponseData{
 			status: 0,
 			size:   0,
+			body:   "",
 		}
 		lw := LoggingResponseWriter{
 			ResponseWriter: w,
@@ -176,6 +177,7 @@ func WithLogging(h http.HandlerFunc, sugar zap.SugaredLogger) http.HandlerFunc {
 			"duration", duration,
 			"status", responseData.status,
 			"size", responseData.size,
+			"body", responseData.body,
 		)
 	}
 }

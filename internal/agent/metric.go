@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
@@ -11,6 +12,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 )
@@ -110,14 +112,26 @@ func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	for _, metric := range allMetrics {
 		jsonMetric, err := json.Marshal(metric)
 		if err != nil {
-			fmt.Println("Failed to encode metric:", metric, "Error:", err)
+			log.Printf("Failed to encode metric: %+v, Error: %v", metric, err)
+			continue
 		}
 
-		buf := bytes.NewBuffer(nil)
-		zb := gzip.NewWriter(buf)
+		var gzippedMetric bytes.Buffer
+		zb := gzip.NewWriter(&gzippedMetric)
+
 		_, err = zb.Write(jsonMetric)
 		if err != nil {
-			fmt.Println("Failed to gzip metric:", metric, "Error:", err)
+			log.Printf("Failed to gzip metric: %+v, Error: %v", metric, err)
+			err := zb.Close()
+			if err != nil {
+				return
+			}
+			continue
+		}
+
+		err = zb.Close()
+		if err != nil {
+			return
 		}
 
 		url := fmt.Sprintf("%s/", hookPath)
@@ -125,14 +139,57 @@ func sendMetrics(repo handler.MetricRepository, hookPath string) {
 		req.Method = http.MethodPost
 		req.URL = url
 		req.Header.Set("Content-Type", "application/json")
-		req.SetBody(buf)
+		req.Header.Set("Content-Encoding", "gzip")
+		req.SetBody(gzippedMetric.Bytes())
 
 		res, err := req.Send()
 		if err != nil {
-			fmt.Println("Failed to send metric:", metric, "Error:", err)
+			fmt.Println("Failed to send metric: problem triggered", metric, "Error:", err)
 		}
 		if res.StatusCode() != http.StatusOK {
 			fmt.Println("Failed to send metric: ", metric, "Wrong response code: ", res.StatusCode())
 		}
 	}
+}
+
+func SaveMetricsInFileAgent(repo handler.MetricRepository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
+	ticker := time.NewTicker(storeInterval * time.Second)
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := saveMetricsInFile(repo, fileStoragePath); err != nil {
+				return fmt.Errorf("failed to save metrics: %v", err)
+			}
+		case <-ctx.Done():
+			if err := saveMetricsInFile(repo, fileStoragePath); err != nil {
+				return fmt.Errorf("failed to save metrics: %v", err)
+			}
+			return nil
+		}
+	}
+}
+
+func saveMetricsInFile(repo handler.MetricRepository, fileStoragePath string) error {
+	metrics, err := repo.GetAllMetrics()
+	if err != nil {
+		return fmt.Errorf("failed to get metrics: %v", err)
+	}
+
+	file, err := os.OpenFile(fileStoragePath, os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %v", err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}()
+
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(metrics); err != nil {
+		return fmt.Errorf("failed to encode metrics: %v", err)
+	}
+
+	return nil
 }
