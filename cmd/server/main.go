@@ -46,7 +46,6 @@ func main() {
 	parseFlags()
 
 	var memStorage *storage.MemStorage
-	memStorage = storage.NewMemStorage()
 	if flagRestore {
 		memStorage = storage.NewMemStorageFromFile(filepath.Join(rootDir, flagFileStoragePath))
 	} else {
