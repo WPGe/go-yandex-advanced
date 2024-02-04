@@ -1,18 +1,23 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/repository"
+	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 )
 
-func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
+func MetricAgent(repo handler.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(pollInterval * time.Second)
 	sendTicker := time.NewTicker(reportInterval * time.Second)
 
@@ -34,7 +39,7 @@ func MetricAgent(repo repository.MetricRepository, hookPath string, reportInterv
 	}
 }
 
-func collectGaugeRuntimeMetrics(repo repository.MetricRepository) {
+func collectGaugeRuntimeMetrics(repo handler.MetricRepository) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -68,11 +73,11 @@ func collectGaugeRuntimeMetrics(repo repository.MetricRepository) {
 	addGaugeMetricToStorage("RandomValue", rand.Float64(), repo)
 }
 
-func addGaugeMetricToStorage(name string, value float64, repo repository.MetricRepository) {
+func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepository) {
 	metric := entity.Metric{
-		Type:  entity.Gauge,
-		Name:  name,
-		Value: value,
+		MType: entity.Gauge,
+		ID:    name,
+		Value: &value,
 	}
 
 	err := repo.AddMetric(name, metric)
@@ -81,11 +86,11 @@ func addGaugeMetricToStorage(name string, value float64, repo repository.MetricR
 	}
 }
 
-func addCounterMetricToStorage(name string, value int64, repo repository.MetricRepository) {
+func addCounterMetricToStorage(name string, value int64, repo handler.MetricRepository) {
 	metric := entity.Metric{
-		Type:  entity.Counter,
-		Name:  name,
-		Value: value,
+		MType: entity.Counter,
+		ID:    name,
+		Delta: &value,
 	}
 
 	err := repo.AddMetric(name, metric)
@@ -94,27 +99,97 @@ func addCounterMetricToStorage(name string, value int64, repo repository.MetricR
 	}
 }
 
-func increasePollIteration(repo repository.MetricRepository) {
+func increasePollIteration(repo handler.MetricRepository) {
 	addCounterMetricToStorage("PollCount", 1, repo)
 }
 
-func sendMetrics(repo repository.MetricRepository, hookPath string) {
+func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	allMetrics, err := repo.GetAllMetrics()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, metric := range allMetrics {
-		url := fmt.Sprintf("%s/%s/%s/%v", hookPath, metric.Type, metric.Name, metric.Value)
+		jsonMetric, err := json.Marshal(metric)
+		if err != nil {
+			log.Printf("Failed to encode metric: %+v, Error: %v", metric, err)
+			continue
+		}
+
+		var gzippedMetric bytes.Buffer
+		zb := gzip.NewWriter(&gzippedMetric)
+
+		_, err = zb.Write(jsonMetric)
+		if err != nil {
+			log.Printf("Failed to gzip metric: %+v, Error: %v", metric, err)
+			err := zb.Close()
+			if err != nil {
+				return
+			}
+			continue
+		}
+
+		err = zb.Close()
+		if err != nil {
+			return
+		}
+
+		url := fmt.Sprintf("%s/", hookPath)
 		req := resty.New().R()
 		req.Method = http.MethodPost
 		req.URL = url
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		req.SetBody(gzippedMetric.Bytes())
+
 		res, err := req.Send()
 		if err != nil {
-			fmt.Println("Failed to send metric:", metric, "Error:", err)
+			fmt.Println("Failed to send metric: problem triggered", metric, "Error:", err)
 		}
 		if res.StatusCode() != http.StatusOK {
 			fmt.Println("Failed to send metric: ", metric, "Wrong response code: ", res.StatusCode())
 		}
 	}
+}
+
+func SaveMetricsInFileAgent(repo handler.MetricRepository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
+	ticker := time.NewTicker(storeInterval * time.Second)
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := saveMetricsInFile(repo, fileStoragePath); err != nil {
+				return fmt.Errorf("failed to save metrics: %v", err)
+			}
+		case <-ctx.Done():
+			if err := saveMetricsInFile(repo, fileStoragePath); err != nil {
+				return fmt.Errorf("failed to save metrics: %v", err)
+			}
+			return nil
+		}
+	}
+}
+
+func saveMetricsInFile(repo handler.MetricRepository, fileStoragePath string) error {
+	metrics, err := repo.GetAllMetrics()
+	if err != nil {
+		return fmt.Errorf("failed to get metrics: %v", err)
+	}
+
+	file, err := os.OpenFile(fileStoragePath, os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %v", err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}()
+
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(metrics); err != nil {
+		return fmt.Errorf("failed to encode metrics: %v", err)
+	}
+
+	return nil
 }
