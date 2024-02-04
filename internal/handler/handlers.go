@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
@@ -14,7 +15,7 @@ import (
 	"time"
 )
 
-func MetricUpdateHandler(repo MetricRepository) http.HandlerFunc {
+func MetricUpdateHandler(repo Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metric entity.Metric
 
@@ -67,7 +68,7 @@ func MetricUpdateHandler(repo MetricRepository) http.HandlerFunc {
 	}
 }
 
-func MetricGetHandler(repo MetricRepository) http.HandlerFunc {
+func MetricGetHandler(repo Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 
@@ -99,7 +100,7 @@ func MetricGetHandler(repo MetricRepository) http.HandlerFunc {
 	}
 }
 
-func MetricPostHandler(repo MetricRepository) http.HandlerFunc {
+func MetricPostHandler(repo Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var incomingMetric entity.Metric
 
@@ -126,7 +127,7 @@ func MetricPostHandler(repo MetricRepository) http.HandlerFunc {
 	}
 }
 
-func MetricGetAllHandler(repo MetricRepository) http.HandlerFunc {
+func MetricGetAllHandler(repo Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 
@@ -149,6 +150,21 @@ func MetricGetAllHandler(repo MetricRepository) http.HandlerFunc {
 				}
 			}
 		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func PingDb(db *sql.DB, logger *zap.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if db == nil {
+			return
+		}
+		if err := db.Ping(); err != nil {
+			logger.Error("Pinging DB error", zap.Error(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	}
 }

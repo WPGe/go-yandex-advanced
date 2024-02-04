@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func MetricAgent(repo handler.MetricRepository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
+func MetricAgent(repo handler.Repository, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(pollInterval * time.Second)
 	sendTicker := time.NewTicker(reportInterval * time.Second)
 
@@ -39,7 +39,7 @@ func MetricAgent(repo handler.MetricRepository, hookPath string, reportInterval 
 	}
 }
 
-func collectGaugeRuntimeMetrics(repo handler.MetricRepository) {
+func collectGaugeRuntimeMetrics(repo handler.Repository) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
@@ -73,7 +73,7 @@ func collectGaugeRuntimeMetrics(repo handler.MetricRepository) {
 	addGaugeMetricToStorage("RandomValue", rand.Float64(), repo)
 }
 
-func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepository) {
+func addGaugeMetricToStorage(name string, value float64, repo handler.Repository) {
 	metric := entity.Metric{
 		MType: entity.Gauge,
 		ID:    name,
@@ -86,7 +86,7 @@ func addGaugeMetricToStorage(name string, value float64, repo handler.MetricRepo
 	}
 }
 
-func addCounterMetricToStorage(name string, value int64, repo handler.MetricRepository) {
+func addCounterMetricToStorage(name string, value int64, repo handler.Repository) {
 	metric := entity.Metric{
 		MType: entity.Counter,
 		ID:    name,
@@ -99,11 +99,11 @@ func addCounterMetricToStorage(name string, value int64, repo handler.MetricRepo
 	}
 }
 
-func increasePollIteration(repo handler.MetricRepository) {
+func increasePollIteration(repo handler.Repository) {
 	addCounterMetricToStorage("PollCount", 1, repo)
 }
 
-func sendMetrics(repo handler.MetricRepository, hookPath string) {
+func sendMetrics(repo handler.Repository, hookPath string) {
 	allMetrics, err := repo.GetAllMetrics()
 	if err != nil {
 		log.Fatal(err)
@@ -152,7 +152,7 @@ func sendMetrics(repo handler.MetricRepository, hookPath string) {
 	}
 }
 
-func SaveMetricsInFileAgent(repo handler.MetricRepository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
+func SaveMetricsInFileAgent(repo handler.Repository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
 	ticker := time.NewTicker(storeInterval * time.Second)
 
 	for {
@@ -170,7 +170,7 @@ func SaveMetricsInFileAgent(repo handler.MetricRepository, fileStoragePath strin
 	}
 }
 
-func saveMetricsInFile(repo handler.MetricRepository, fileStoragePath string) error {
+func saveMetricsInFile(repo handler.Repository, fileStoragePath string) error {
 	metrics, err := repo.GetAllMetrics()
 	if err != nil {
 		return fmt.Errorf("failed to get metrics: %v", err)

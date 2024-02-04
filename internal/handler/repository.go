@@ -4,7 +4,7 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 )
 
-type MetricRepository interface {
+type Repository interface {
 	AddMetric(id string, metric entity.Metric) error
 	GetMetric(id string) (entity.Metric, bool, error)
 	GetAllMetrics() (map[string]entity.Metric, error)
