@@ -6,16 +6,29 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+	"log"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
 
 func TestAgent_MetricAgent(t *testing.T) {
-	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]entity.Metric))
-	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]entity.Metric))
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("can't initialize zap logger: %v", err)
+	}
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(logger)
 
-	server := httptest.NewServer(handler.MetricUpdateHandler(serverStorage))
+	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
+	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
+
+	server := httptest.NewServer(handler.MetricUpdateHandler(serverStorage, logger))
 	defer server.Close()
 
 	stopCh := make(chan struct{})

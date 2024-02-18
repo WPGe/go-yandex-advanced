@@ -5,8 +5,7 @@ import (
 )
 
 type Repository interface {
-	AddMetric(id string, metric entity.Metric) error
-	GetMetric(id string) (entity.Metric, bool, error)
-	GetAllMetrics() (map[string]entity.Metric, error)
-	ClearMetrics() error
+	AddMetric(metric entity.Metric) error
+	GetMetric(id, metricType string) (*entity.Metric, error)
+	GetAllMetrics() (entity.MetricsStore, error)
 }

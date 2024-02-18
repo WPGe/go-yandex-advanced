@@ -2,8 +2,10 @@ package storage
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"log"
 	"os"
 	"sync"
@@ -11,22 +13,25 @@ import (
 
 type MemStorage struct {
 	mu      sync.RWMutex
-	metrics map[string]entity.Metric
+	metrics entity.MetricsStore
+	logger  *zap.Logger
 }
 
-func NewMemStorage() *MemStorage {
+func NewMemStorage(logger *zap.Logger) *MemStorage {
 	return &MemStorage{
-		metrics: make(map[string]entity.Metric),
+		metrics: make(entity.MetricsStore),
+		logger:  logger,
 	}
 }
 
-func NewMemStorageWithMetrics(initialMetrics map[string]entity.Metric) *MemStorage {
+func NewMemStorageWithMetrics(initialMetrics entity.MetricsStore, logger *zap.Logger) *MemStorage {
 	return &MemStorage{
 		metrics: initialMetrics,
+		logger:  logger,
 	}
 }
 
-func NewMemStorageFromFile(fileStoragePath string) *MemStorage {
+func NewMemStorageFromFile(fileStoragePath string, logger *zap.Logger) *MemStorage {
 	file, err := os.OpenFile(fileStoragePath, os.O_RDONLY|os.O_CREATE, 0755)
 	if err != nil {
 		log.Fatalf("%+v", errors.Wrap(err, "failed to open file"))
@@ -46,31 +51,34 @@ func NewMemStorageFromFile(fileStoragePath string) *MemStorage {
 
 	if fileStat.Size() == 0 {
 		// Файл пустой, возвращаем MemStorage с пустым map
-		return NewMemStorageWithMetrics(make(map[string]entity.Metric))
+		return NewMemStorageWithMetrics(make(entity.MetricsStore), logger)
 	}
 
 	decoder := json.NewDecoder(file)
-	initialMetrics := map[string]entity.Metric{}
+	initialMetrics := entity.MetricsStore{}
 	if err := decoder.Decode(&initialMetrics); err != nil {
 		log.Fatalf("%+v", errors.Wrap(err, "failed to decode metrics"))
 	}
 
-	return NewMemStorageWithMetrics(initialMetrics)
+	return NewMemStorageWithMetrics(initialMetrics, logger)
 }
 
-func (m *MemStorage) AddMetric(id string, metric entity.Metric) error {
+func (m *MemStorage) AddMetric(metric entity.Metric) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	existingMetric, ok := m.metrics[id]
+	var existingMetric entity.Metric
+
+	_, ok := m.metrics[metric.MType]
 	if !ok {
-		m.metrics[id] = metric
+		m.metrics[metric.MType] = map[string]entity.Metric{
+			metric.ID: metric,
+		}
 		return nil
 	}
 
-	if existingMetric.MType == entity.Gauge {
-		existingMetric.Value = metric.Value
-		m.metrics[id] = existingMetric
+	if metric.MType == entity.Gauge {
+		m.metrics[metric.MType][metric.ID] = metric
 		return nil
 	}
 
@@ -78,24 +86,33 @@ func (m *MemStorage) AddMetric(id string, metric entity.Metric) error {
 		return errors.New("delta cannot be nil for counter metric")
 	}
 
+	existingMetric = m.metrics[metric.MType][metric.ID]
 	if existingMetric.Delta == nil {
 		existingMetric.Delta = new(int64)
 	}
 
 	*existingMetric.Delta += *metric.Delta
-	m.metrics[id] = existingMetric
+	m.metrics[metric.MType][metric.ID] = existingMetric
 
 	return nil
 }
 
-func (m *MemStorage) GetMetric(id string) (entity.Metric, bool, error) {
+func (m *MemStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	metric, ok := m.metrics[id]
-	return metric, ok, nil
+
+	metrics, ok := m.metrics[metricType]
+	if !ok {
+		return nil, fmt.Errorf("metric type: %s does not exist", metricType)
+	}
+	metric, ok := metrics[id]
+	if !ok {
+		return nil, fmt.Errorf("metric id: %s does not exist", id)
+	}
+	return &metric, nil
 }
 
-func (m *MemStorage) GetAllMetrics() (map[string]entity.Metric, error) {
+func (m *MemStorage) GetAllMetrics() (entity.MetricsStore, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.metrics, nil
@@ -104,7 +121,7 @@ func (m *MemStorage) GetAllMetrics() (map[string]entity.Metric, error) {
 func (m *MemStorage) ClearMetrics() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.metrics = make(map[string]entity.Metric)
+	m.metrics = make(entity.MetricsStore)
 
 	return nil
 }

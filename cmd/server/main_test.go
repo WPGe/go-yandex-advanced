@@ -8,6 +8,8 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,6 +31,17 @@ func TestMetricUpdateHandler(t *testing.T) {
 		expectedStorage *storage.MemStorage
 	}
 
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("can't initialize zap logger: %v", err)
+	}
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(logger)
+
 	testCases := []struct {
 		name    string
 		storage *storage.MemStorage
@@ -36,7 +49,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 	}{
 		{
 			name:    "empty type",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{}),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
 			want: want{
 				code:     http.StatusBadRequest,
 				request:  "/update/asdasd/asdasd/232",
@@ -45,7 +58,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name:    "empty name",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{}),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
 			want: want{
 				code:     http.StatusNotFound,
 				request:  "/update/gauge/",
@@ -54,7 +67,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name:    "incorrect value",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{}),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
 			want: want{
 				code:     http.StatusBadRequest,
 				request:  "/update/gauge/test1/asdasdasd",
@@ -63,100 +76,104 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name: "add exist gauge metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-				"test1": {
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+				entity.Gauge: {"test1": {
 					MType: entity.Gauge,
 					ID:    "test1",
 					Value: float64Ptr(2.5),
-				},
-			}),
+				}},
+			}, logger),
 			want: want{
 				code:     http.StatusOK,
 				request:  "/update/gauge/test1/2",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-					"test1": {
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+					entity.Gauge: {"test1": {
 						MType: entity.Gauge,
 						ID:    "test1",
 						Value: float64Ptr(2.0),
-					},
-				}),
+					}},
+				}, logger),
 			},
 		},
 		{
 			name: "add not exist gauge metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-				"test1": {
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+				entity.Gauge: {"test1": {
 					MType: entity.Gauge,
 					ID:    "test1",
 					Value: float64Ptr(2.5),
-				},
-			}),
+				}},
+			}, logger),
 			want: want{
 				code:     http.StatusOK,
 				request:  "/update/gauge/test2/2",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-					"test1": {
-						MType: entity.Gauge,
-						ID:    "test1",
-						Value: float64Ptr(2.5),
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+					entity.Gauge: {
+						"test1": {
+							MType: entity.Gauge,
+							ID:    "test1",
+							Value: float64Ptr(2.5),
+						},
+						"test2": {
+							MType: entity.Gauge,
+							ID:    "test2",
+							Value: float64Ptr(2.0),
+						},
 					},
-					"test2": {
-						MType: entity.Gauge,
-						ID:    "test2",
-						Value: float64Ptr(2.0),
-					},
-				}),
+				}, logger),
 			},
 		},
 		{
 			name: "add not exist counter metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-				"test1": {
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+				entity.Counter: {"test1": {
 					MType: entity.Counter,
 					ID:    "test1",
 					Delta: int64Ptr(2),
-				},
-			}),
+				}},
+			}, logger),
 			want: want{
 				code:     http.StatusOK,
 				request:  "/update/counter/test2/3",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-					"test1": {
-						MType: entity.Counter,
-						ID:    "test1",
-						Delta: int64Ptr(2),
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+					entity.Counter: {
+						"test1": {
+							MType: entity.Counter,
+							ID:    "test1",
+							Delta: int64Ptr(2),
+						},
+						"test2": {
+							MType: entity.Counter,
+							ID:    "test2",
+							Delta: int64Ptr(3),
+						},
 					},
-					"test2": {
-						MType: entity.Counter,
-						ID:    "test2",
-						Delta: int64Ptr(3),
-					},
-				}),
+				}, logger),
 			},
 		},
 		{
 			name: "add exist counter metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-				"test1": {
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+				entity.Counter: {"test1": {
 					MType: entity.Counter,
 					ID:    "test1",
 					Delta: int64Ptr(2),
-				},
-			}),
+				}},
+			}, logger),
 			want: want{
 				code:     http.StatusOK,
 				request:  "/update/counter/test1/3",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]entity.Metric{
-					"test1": {
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
+					entity.Counter: {"test1": {
 						MType: entity.Counter,
 						ID:    "test1",
 						Delta: int64Ptr(5),
-					},
-				}),
+					}},
+				}, logger),
 			},
 		},
 	}
@@ -164,7 +181,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			r := chi.NewRouter()
-			r.Post("/update/{type}/{name}/{value}", handler.MetricUpdateHandler(testCase.storage))
+			r.Post("/update/{type}/{name}/{value}", handler.MetricUpdateHandler(testCase.storage, logger))
 			srv := httptest.NewServer(r)
 			defer srv.Close()
 

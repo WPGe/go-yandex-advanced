@@ -15,6 +15,8 @@ type Config struct {
 	Restore         bool   `env:"RESTORE"`
 	RootDir         string `env:"ROOT_DIR"`
 	DatabaseDSN     string `env:"DATABASE_DSN"`
+	ReportInterval  int    `env:"REPORT_INTERVAL"`
+	PollInterval    int    `env:"POLL_INTERVAL"`
 }
 
 func NewServer() (Config, error) {
@@ -55,7 +57,7 @@ func parseServerFlags() Config {
 	flagStoreInterval := flag.Int64("i", 300, "time interval when metrics saved to file")
 	flagFileStoragePath := flag.String("f", "/tmp/metrics-db.json", "filepath where the current metrics are saved")
 	flagRestore := flag.Bool("r", true, "load previously saved metrics from a file at startup")
-	flagDatabaseDSN := flag.String("d", "", "database DSN")
+	flagDatabaseDSN := flag.String("d", "postgres://metric:metric@localhost:5432/metric?sslmode=disable", "database DSN")
 	flag.Parse()
 
 	return Config{
@@ -64,6 +66,46 @@ func parseServerFlags() Config {
 		FileStoragePath: *flagFileStoragePath,
 		Restore:         *flagRestore,
 		DatabaseDSN:     *flagDatabaseDSN,
+	}
+}
+
+func NewAgent() (Config, error) {
+	flags := parseAgentFlags()
+
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
+
+	config := Config{}
+	if err := env.Parse(&config); err != nil {
+		return Config{}, err
+	}
+
+	if config.Address == "" {
+		config.Address = flags.Address
+	}
+	if config.ReportInterval == 0 {
+		config.ReportInterval = flags.ReportInterval
+	}
+	if config.PollInterval == 0 {
+		config.PollInterval = flags.PollInterval
+	}
+
+	startDebugLogs()
+
+	return config, nil
+}
+
+func parseAgentFlags() Config {
+	flagRunAddr := flag.String("a", "localhost:8080", "address and port to run server")
+	flagReportInterval := flag.Int("r", 10, "report interval")
+	flagPollInterval := flag.Int("p", 2, "poll interval")
+	flag.Parse()
+
+	return Config{
+		Address:        *flagRunAddr,
+		ReportInterval: *flagReportInterval,
+		PollInterval:   *flagPollInterval,
 	}
 }
 
