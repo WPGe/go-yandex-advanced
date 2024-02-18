@@ -37,6 +37,7 @@ func NewServer(log *zap.Logger, addr string) *Server {
 func (s *Server) InitHandlers(rep handler.Repository, db *sql.DB) {
 	r := chi.NewRouter()
 	r.Post("/update/", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(rep, s.logger), sugar)))
+	r.Post("/updates/", handler.WithGzip(handler.WithLogging(handler.MetricUpdatesHandler(rep, s.logger), sugar)))
 	r.Post("/update/{type}/{name}/{value}", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(rep, s.logger), sugar)))
 	r.Get("/value/{type}/{name}", handler.WithGzip(handler.WithLogging(handler.MetricGetHandler(rep, s.logger), sugar)))
 	r.Post("/value/", handler.WithGzip(handler.WithLogging(handler.MetricPostHandler(rep, s.logger), sugar)))

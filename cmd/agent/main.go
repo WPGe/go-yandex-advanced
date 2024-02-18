@@ -31,5 +31,5 @@ func main() {
 	memStorage := storage.NewMemStorage(logger)
 
 	stopCh := make(chan struct{})
-	agent.MetricAgent(memStorage, "http://"+cfg.Address+"/update", time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh, logger)
+	agent.MetricAgent(memStorage, "http://"+cfg.Address+"/updates", time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh, logger)
 }

@@ -72,6 +72,27 @@ func MetricUpdateHandler(repo Repository, logger *zap.Logger) http.HandlerFunc {
 	}
 }
 
+func MetricUpdatesHandler(repo Repository, logger *zap.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("Update: start")
+
+		var metrics []entity.Metric
+
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&metrics); err != nil {
+			logger.Error("Update: Failed to decode JSON request", zap.Error(err))
+			http.Error(w, "Failed to decode JSON request", http.StatusBadRequest)
+			return
+		}
+
+		if err := repo.AddMetrics(metrics); err != nil {
+			logger.Fatal("Update: add error", zap.Error(err))
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func MetricGetHandler(repo Repository, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

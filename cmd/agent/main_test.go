@@ -32,7 +32,7 @@ func TestAgent_MetricAgent(t *testing.T) {
 	defer server.Close()
 
 	stopCh := make(chan struct{})
-	go agent.MetricAgent(agentStorage, server.URL+"/update", 2, 10, stopCh)
+	go agent.MetricAgent(agentStorage, server.URL+"/updates", 2, 10, stopCh, logger)
 
 	time.Sleep(1 * time.Second)
 	close(stopCh)

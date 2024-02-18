@@ -29,10 +29,14 @@ func MetricAgent(storage *storage.MemStorage, hookPath string, reportInterval ti
 			collectGaugeRuntimeMetrics(storage, logger)
 			increasePollIteration(storage)
 		case <-sendTicker.C:
-			sendMetrics(storage, hookPath, logger)
-			err := storage.ClearMetrics()
+			err := sendMetrics(storage, hookPath, logger)
 			if err != nil {
-				log.Fatal(err)
+				logger.Error("Send error:", zap.Error(err))
+			}
+
+			err = storage.ClearMetrics()
+			if err != nil {
+				logger.Error("Clear error:", zap.Error(err))
 			}
 
 		case <-stopCh:
@@ -105,56 +109,53 @@ func increasePollIteration(storage *storage.MemStorage) {
 	addCounterMetricToStorage("PollCount", 1, storage)
 }
 
-func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logger) {
+func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logger) error {
 	allMetrics, err := storage.GetAllMetrics()
 	if err != nil {
 		logger.Error("Get all error:", zap.Error(err))
+		return err
 	}
 
+	var metricsForSend []entity.Metric
 	for _, typedMetrics := range allMetrics {
 		for _, metric := range typedMetrics {
-			jsonMetric, err := json.Marshal(metric)
-			if err != nil {
-				log.Printf("Failed to encode metric: %+v, Error: %v", metric, err)
-				continue
-			}
-
-			var gzippedMetric bytes.Buffer
-			zb := gzip.NewWriter(&gzippedMetric)
-
-			_, err = zb.Write(jsonMetric)
-			if err != nil {
-				log.Printf("Failed to gzip metric: %+v, Error: %v", metric, err)
-				err := zb.Close()
-				if err != nil {
-					return
-				}
-				continue
-			}
-
-			err = zb.Close()
-			if err != nil {
-				return
-			}
-
-			url := fmt.Sprintf("%s/", hookPath)
-			req := resty.New().R()
-			req.Method = http.MethodPost
-			req.URL = url
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Content-Encoding", "gzip")
-			req.SetBody(gzippedMetric.Bytes())
-
-			res, err := req.Send()
-			if err != nil {
-				fmt.Println("Failed to send metric: problem triggered", metric, "Error:", err)
-			}
-			if res.StatusCode() != http.StatusOK {
-				fmt.Println("Failed to send metric: ", metric, "Wrong response code: ", res.StatusCode())
-			}
+			metricsForSend = append(metricsForSend, metric)
 		}
 	}
+	jsonMetrics, err := json.Marshal(metricsForSend)
+	if err != nil {
+		logger.Error("Marshaling error:", zap.Error(err))
+		return err
+	}
 
+	var gzippedMetric bytes.Buffer
+	zb := gzip.NewWriter(&gzippedMetric)
+
+	_, err = zb.Write(jsonMetrics)
+	if err != nil {
+		logger.Error("Failed to gzip metrics:", zap.Error(err))
+		return err
+	}
+	zb.Close()
+
+	url := fmt.Sprintf("%s/", hookPath)
+	req := resty.New().R()
+	req.Method = http.MethodPost
+	req.URL = url
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.SetBody(gzippedMetric.Bytes())
+
+	res, err := req.Send()
+	if err != nil {
+		logger.Error("Failed to send metrics", zap.Error(err))
+		return err
+	}
+	if res.StatusCode() != http.StatusOK {
+		logger.Error("Failed to send metric: wrong response code: ", zap.Int("status", res.StatusCode()))
+	}
+
+	return nil
 }
 
 func SaveMetricsInFileAgent(storage handler.Repository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {

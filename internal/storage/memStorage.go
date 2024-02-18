@@ -97,6 +97,20 @@ func (m *MemStorage) AddMetric(metric entity.Metric) error {
 	return nil
 }
 
+func (m *MemStorage) AddMetrics(metrics []entity.Metric) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, metric := range metrics {
+		err := m.AddMetric(metric)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m *MemStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

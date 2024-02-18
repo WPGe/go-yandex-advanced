@@ -94,6 +94,28 @@ func (storage *DbStorage) AddMetric(metric entity.Metric) error {
 	return nil
 }
 
+func (storage *DbStorage) AddMetrics(metrics []entity.Metric) error {
+	tx, err := storage.db.Begin()
+	if err != nil {
+		storage.logger.Error("Add metrics: begin transaction error", zap.Error(err))
+		return err
+	}
+
+	for _, metric := range metrics {
+		if err := add(tx, storage.logger, metric); err != nil {
+			storage.logger.Error("Add metrics: data error", zap.Error(err))
+			tx.Rollback()
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		storage.logger.Error("Add metrics: commit transaction error", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
 func (storage *DbStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
 	var mID, mType string
 	var mDelta sql.NullInt64
