@@ -144,7 +144,12 @@ func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
 		storage.logger.Error("GetAll: select error", zap.Error(err))
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			storage.logger.Error("GetAll: select error", zap.Error(err))
+		}
+	}(rows)
 
 	metrics := make(entity.MetricsStore)
 	for rows.Next() {

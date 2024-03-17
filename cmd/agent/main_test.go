@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/WPGe/go-yandex-advanced/internal/service"
+	"github.com/WPGe/go-yandex-advanced/internal/utils"
 	"log"
 	"net/http/httptest"
 	"testing"
@@ -30,14 +32,15 @@ func TestAgent_MetricAgent(t *testing.T) {
 	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
 	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
 
-	server := httptest.NewServer(handler.MetricUpdateHandler(serverStorage, logger))
+	srv := service.New(serverStorage)
+	server := httptest.NewServer(utils.WithGzip(handler.MetricUpdatesHandler(srv, logger)))
 	defer server.Close()
 
 	stopCh := make(chan struct{})
 	agentStruct := agent.NewAgent(logger, agentStorage, server.URL+"/updates")
-	agentStruct.MetricAgent(10, 2, stopCh)
+	agentStruct.MetricAgent(4, 2, stopCh)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 	close(stopCh)
 
 	assert.Equal(t, agentStorage, serverStorage)
