@@ -1,12 +1,14 @@
 package main
 
 import (
+	"log"
+	"time"
+
+	"go.uber.org/zap"
+
 	"github.com/WPGe/go-yandex-advanced/internal/agent"
 	"github.com/WPGe/go-yandex-advanced/internal/config"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"go.uber.org/zap"
-	"log"
-	"time"
 )
 
 func main() {
@@ -31,5 +33,7 @@ func main() {
 	memStorage := storage.NewMemStorage(logger)
 
 	stopCh := make(chan struct{})
-	agent.MetricAgent(memStorage, "http://"+cfg.Address+"/updates", time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh, logger)
+
+	agentStruct := agent.NewAgent(logger, memStorage, "http://"+cfg.Address+"/updates")
+	agentStruct.MetricAgent(time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh)
 }

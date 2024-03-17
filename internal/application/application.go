@@ -3,14 +3,7 @@ package application
 import (
 	"context"
 	"database/sql"
-	"github.com/WPGe/go-yandex-advanced/internal/agent"
-	"github.com/WPGe/go-yandex-advanced/internal/config"
-	"github.com/WPGe/go-yandex-advanced/internal/handler"
-	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"github.com/go-chi/chi/v5"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
+	"github.com/WPGe/go-yandex-advanced/internal/utils"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +11,17 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/WPGe/go-yandex-advanced/internal/agent"
+	"github.com/WPGe/go-yandex-advanced/internal/config"
+	"github.com/WPGe/go-yandex-advanced/internal/handler"
+	"github.com/WPGe/go-yandex-advanced/internal/service"
+	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
 
 var sugar zap.SugaredLogger
@@ -34,14 +38,14 @@ func NewServer(log *zap.Logger, addr string) *Server {
 	}
 }
 
-func (s *Server) InitHandlers(rep handler.Repository, db *sql.DB) {
+func (s *Server) InitHandlers(srv handler.Service, db *sql.DB) {
 	r := chi.NewRouter()
-	r.Post("/update/", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(rep, s.logger), sugar)))
-	r.Post("/updates/", handler.WithGzip(handler.WithLogging(handler.MetricUpdatesHandler(rep, s.logger), sugar)))
-	r.Post("/update/{type}/{name}/{value}", handler.WithGzip(handler.WithLogging(handler.MetricUpdateHandler(rep, s.logger), sugar)))
-	r.Get("/value/{type}/{name}", handler.WithGzip(handler.WithLogging(handler.MetricGetHandler(rep, s.logger), sugar)))
-	r.Post("/value/", handler.WithGzip(handler.WithLogging(handler.MetricPostHandler(rep, s.logger), sugar)))
-	r.Get("/", handler.WithGzip(handler.WithLogging(handler.MetricGetAllHandler(rep, s.logger), sugar)))
+	r.Post("/update/", utils.WithGzip(utils.WithLogging(handler.MetricUpdateHandler(srv, s.logger), sugar)))
+	r.Post("/updates/", utils.WithGzip(utils.WithLogging(handler.MetricUpdatesHandler(srv, s.logger), sugar)))
+	r.Post("/update/{type}/{name}/{value}", utils.WithGzip(utils.WithLogging(handler.MetricUpdateHandler(srv, s.logger), sugar)))
+	r.Get("/value/{type}/{name}", utils.WithGzip(utils.WithLogging(handler.MetricGetHandler(srv, s.logger), sugar)))
+	r.Post("/value/", utils.WithGzip(utils.WithLogging(handler.MetricPostHandler(srv, s.logger), sugar)))
+	r.Get("/", utils.WithGzip(utils.WithLogging(handler.MetricGetAllHandler(srv, s.logger), sugar)))
 	r.Get("/ping", handler.PingDb(db, s.logger))
 
 	s.srv.Handler = r
@@ -75,7 +79,7 @@ func Run() {
 		logger.Error("Init config error", zap.Error(err))
 	}
 
-	var repo handler.Repository
+	var repo service.Repository
 	var db *sql.DB
 	if cfg.DatabaseDSN != "" {
 		db, err = ConnectDB(&cfg)
@@ -98,8 +102,9 @@ func Run() {
 		}
 	}
 
+	srv := service.New(repo)
 	server := NewServer(logger, cfg.Address)
-	server.InitHandlers(repo, db)
+	server.InitHandlers(srv, db)
 
 	logger.Info("Starting server", zap.String("addr", cfg.Address))
 

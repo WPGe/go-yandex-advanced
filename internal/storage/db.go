@@ -2,10 +2,12 @@ package storage
 
 import (
 	"database/sql"
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"sync"
+
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"sync"
+
+	"github.com/WPGe/go-yandex-advanced/internal/entity"
 )
 
 type DbStorage struct {
@@ -63,7 +65,7 @@ func add(tx *sql.Tx, logger *zap.Logger, metric entity.Metric) error {
 			)
 		default:
 			_, err = tx.Exec(
-				"INSERT INTO metrics (id, type, delta) VALUES ($1, $2, $3)",
+				"INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)",
 				metric.ID, metric.MType, *metric.Value,
 			)
 		}

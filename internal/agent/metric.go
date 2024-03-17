@@ -6,113 +6,175 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/handler"
-	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"github.com/go-resty/resty/v2"
-	"go.uber.org/zap"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
+
+	"github.com/go-resty/resty/v2"
+	"go.uber.org/zap"
+
+	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/service"
+	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
 
-func MetricAgent(storage *storage.MemStorage, hookPath string, reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}, logger *zap.Logger) {
-	ticker := time.NewTicker(pollInterval * time.Second)
+type Agent struct {
+	logger   *zap.Logger
+	storage  *storage.MemStorage
+	hookPath string
+}
+
+func NewAgent(logger *zap.Logger, storage *storage.MemStorage, hookPath string) *Agent {
+	return &Agent{
+		logger:   logger,
+		storage:  storage,
+		hookPath: hookPath,
+	}
+}
+
+func (a *Agent) MetricAgent(reportInterval time.Duration, pollInterval time.Duration, stopCh <-chan struct{}) {
+	pollTicker := time.NewTicker(pollInterval * time.Second)
 	sendTicker := time.NewTicker(reportInterval * time.Second)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
 	for {
 		select {
-		case <-ticker.C:
-			collectGaugeRuntimeMetrics(storage, logger)
-			increasePollIteration(storage)
+		case <-pollTicker.C:
+			a.collectGaugeRuntimeMetrics()
+			a.increasePollIteration()
 		case <-sendTicker.C:
-			err := sendMetrics(storage, hookPath, logger)
-			if err != nil {
-				logger.Error("Send error:", zap.Error(err))
-			}
+			err := a.Retry(ctx, 3, func(ctx context.Context) error {
+				err := a.sendMetrics()
+				if err != nil {
+					a.logger.Error("Send error:", zap.Error(err))
+				}
 
-			err = storage.ClearMetrics()
+				err = a.storage.ClearMetrics()
+				if err != nil {
+					a.logger.Error("Clear error:", zap.Error(err))
+				}
+				return err
+			})
 			if err != nil {
-				logger.Error("Clear error:", zap.Error(err))
+				return
 			}
-
+		case <-ctx.Done():
+			a.logger.Error("Send stop:", zap.Error(ctx.Err()))
+			pollTicker.Stop()
+			sendTicker.Stop()
+			return
 		case <-stopCh:
+			pollTicker.Stop()
+			sendTicker.Stop()
 			return
 		}
 	}
 }
 
-func collectGaugeRuntimeMetrics(storage *storage.MemStorage, logger *zap.Logger) {
+func (a *Agent) Retry(ctx context.Context, maxRetries int, fn func(ctx context.Context) error, intervals ...time.Duration) error {
+	var err error
+	err = fn(ctx)
+	if err == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	for i := 0; i < maxRetries; i++ {
+		a.logger.Info("Retrying", zap.Int("Attempt", i+1))
+
+		t := time.NewTimer(intervals[i])
+		select {
+		case <-t.C:
+			if err = fn(ctx); err == nil {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	a.logger.Error("Retrying failed", zap.Error(err))
+	return err
+}
+
+func (a *Agent) collectGaugeRuntimeMetrics() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	addGaugeMetricToStorage("Alloc", float64(m.Alloc), storage, logger)
-	addGaugeMetricToStorage("BuckHashSys", float64(m.BuckHashSys), storage, logger)
-	addGaugeMetricToStorage("Frees", float64(m.Frees), storage, logger)
-	addGaugeMetricToStorage("GCCPUFraction", float64(m.GCCPUFraction), storage, logger)
-	addGaugeMetricToStorage("GCSys", float64(m.GCSys), storage, logger)
-	addGaugeMetricToStorage("HeapAlloc", float64(m.HeapAlloc), storage, logger)
-	addGaugeMetricToStorage("HeapIdle", float64(m.HeapIdle), storage, logger)
-	addGaugeMetricToStorage("HeapInuse", float64(m.HeapInuse), storage, logger)
-	addGaugeMetricToStorage("HeapObjects", float64(m.HeapObjects), storage, logger)
-	addGaugeMetricToStorage("HeapReleased", float64(m.HeapReleased), storage, logger)
-	addGaugeMetricToStorage("HeapSys", float64(m.HeapSys), storage, logger)
-	addGaugeMetricToStorage("LastGC", float64(m.LastGC), storage, logger)
-	addGaugeMetricToStorage("Lookups", float64(m.Lookups), storage, logger)
-	addGaugeMetricToStorage("MCacheInuse", float64(m.MCacheInuse), storage, logger)
-	addGaugeMetricToStorage("MCacheSys", float64(m.MCacheSys), storage, logger)
-	addGaugeMetricToStorage("MSpanInuse", float64(m.MSpanInuse), storage, logger)
-	addGaugeMetricToStorage("MSpanSys", float64(m.MSpanSys), storage, logger)
-	addGaugeMetricToStorage("Mallocs", float64(m.Mallocs), storage, logger)
-	addGaugeMetricToStorage("NextGC", float64(m.NextGC), storage, logger)
-	addGaugeMetricToStorage("NumForcedGC", float64(m.NumForcedGC), storage, logger)
-	addGaugeMetricToStorage("NumGC", float64(m.NumGC), storage, logger)
-	addGaugeMetricToStorage("OtherSys", float64(m.OtherSys), storage, logger)
-	addGaugeMetricToStorage("PauseTotalNs", float64(m.PauseTotalNs), storage, logger)
-	addGaugeMetricToStorage("StackInuse", float64(m.StackInuse), storage, logger)
-	addGaugeMetricToStorage("StackSys", float64(m.StackSys), storage, logger)
-	addGaugeMetricToStorage("Sys", float64(m.Sys), storage, logger)
-	addGaugeMetricToStorage("TotalAlloc", float64(m.TotalAlloc), storage, logger)
-	addGaugeMetricToStorage("RandomValue", rand.Float64(), storage, logger)
+	a.addGaugeMetricToStorage("Alloc", float64(m.Alloc))
+	a.addGaugeMetricToStorage("BuckHashSys", float64(m.BuckHashSys))
+	a.addGaugeMetricToStorage("Frees", float64(m.Frees))
+	a.addGaugeMetricToStorage("GCCPUFraction", float64(m.GCCPUFraction))
+	a.addGaugeMetricToStorage("GCSys", float64(m.GCSys))
+	a.addGaugeMetricToStorage("HeapAlloc", float64(m.HeapAlloc))
+	a.addGaugeMetricToStorage("HeapIdle", float64(m.HeapIdle))
+	a.addGaugeMetricToStorage("HeapInuse", float64(m.HeapInuse))
+	a.addGaugeMetricToStorage("HeapObjects", float64(m.HeapObjects))
+	a.addGaugeMetricToStorage("HeapReleased", float64(m.HeapReleased))
+	a.addGaugeMetricToStorage("HeapSys", float64(m.HeapSys))
+	a.addGaugeMetricToStorage("LastGC", float64(m.LastGC))
+	a.addGaugeMetricToStorage("Lookups", float64(m.Lookups))
+	a.addGaugeMetricToStorage("MCacheInuse", float64(m.MCacheInuse))
+	a.addGaugeMetricToStorage("MCacheSys", float64(m.MCacheSys))
+	a.addGaugeMetricToStorage("MSpanInuse", float64(m.MSpanInuse))
+	a.addGaugeMetricToStorage("MSpanSys", float64(m.MSpanSys))
+	a.addGaugeMetricToStorage("Mallocs", float64(m.Mallocs))
+	a.addGaugeMetricToStorage("NextGC", float64(m.NextGC))
+	a.addGaugeMetricToStorage("NumForcedGC", float64(m.NumForcedGC))
+	a.addGaugeMetricToStorage("NumGC", float64(m.NumGC))
+	a.addGaugeMetricToStorage("OtherSys", float64(m.OtherSys))
+	a.addGaugeMetricToStorage("PauseTotalNs", float64(m.PauseTotalNs))
+	a.addGaugeMetricToStorage("StackInuse", float64(m.StackInuse))
+	a.addGaugeMetricToStorage("StackSys", float64(m.StackSys))
+	a.addGaugeMetricToStorage("Sys", float64(m.Sys))
+	a.addGaugeMetricToStorage("TotalAlloc", float64(m.TotalAlloc))
+	a.addGaugeMetricToStorage("RandomValue", rand.Float64())
 }
 
-func addGaugeMetricToStorage(name string, value float64, storage *storage.MemStorage, logger *zap.Logger) {
+func (a *Agent) addGaugeMetricToStorage(name string, value float64) {
 	metric := entity.Metric{
 		MType: entity.Gauge,
 		ID:    name,
 		Value: &value,
 	}
 
-	err := storage.AddMetric(metric)
+	err := a.storage.AddMetric(metric)
 	if err != nil {
-		logger.Fatal("Add error", zap.Error(err))
+		a.logger.Fatal("Add gauge error", zap.Error(err))
 	}
 }
 
-func addCounterMetricToStorage(name string, value int64, storage *storage.MemStorage) {
+func (a *Agent) addCounterMetricToStorage(name string, value int64) {
 	metric := entity.Metric{
 		MType: entity.Counter,
 		ID:    name,
 		Delta: &value,
 	}
 
-	err := storage.AddMetric(metric)
+	err := a.storage.AddMetric(metric)
 	if err != nil {
-		log.Fatal(err)
+		a.logger.Fatal("Add counter error", zap.Error(err))
 	}
 }
 
-func increasePollIteration(storage *storage.MemStorage) {
-	addCounterMetricToStorage("PollCount", 1, storage)
+func (a *Agent) increasePollIteration() {
+	a.addCounterMetricToStorage("PollCount", 1)
 }
 
-func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logger) error {
-	allMetrics, err := storage.GetAllMetrics()
+func (a *Agent) sendMetrics() error {
+	allMetrics, err := a.storage.GetAllMetrics()
 	if err != nil {
-		logger.Error("Get all error:", zap.Error(err))
+		a.logger.Error("Get all error:", zap.Error(err))
 		return err
 	}
 
@@ -124,7 +186,7 @@ func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logge
 	}
 	jsonMetrics, err := json.Marshal(metricsForSend)
 	if err != nil {
-		logger.Error("Marshaling error:", zap.Error(err))
+		a.logger.Error("Marshaling error:", zap.Error(err))
 		return err
 	}
 
@@ -133,12 +195,15 @@ func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logge
 
 	_, err = zb.Write(jsonMetrics)
 	if err != nil {
-		logger.Error("Failed to gzip metrics:", zap.Error(err))
+		a.logger.Error("Failed to gzip metrics:", zap.Error(err))
 		return err
 	}
-	zb.Close()
+	err = zb.Close()
+	if err != nil {
+		return err
+	}
 
-	url := fmt.Sprintf("%s/", hookPath)
+	url := fmt.Sprintf("%s/", a.hookPath)
 	req := resty.New().R()
 	req.Method = http.MethodPost
 	req.URL = url
@@ -148,17 +213,17 @@ func sendMetrics(storage *storage.MemStorage, hookPath string, logger *zap.Logge
 
 	res, err := req.Send()
 	if err != nil {
-		logger.Error("Failed to send metrics", zap.Error(err))
+		a.logger.Error("Failed to send metrics", zap.Error(err))
 		return err
 	}
 	if res.StatusCode() != http.StatusOK {
-		logger.Error("Failed to send metric: wrong response code: ", zap.Int("status", res.StatusCode()))
+		a.logger.Error("Failed to send metric: wrong response code: ", zap.Int("status", res.StatusCode()))
 	}
 
 	return nil
 }
 
-func SaveMetricsInFileAgent(storage handler.Repository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
+func SaveMetricsInFileAgent(storage service.Repository, fileStoragePath string, storeInterval time.Duration, ctx context.Context) error {
 	ticker := time.NewTicker(storeInterval * time.Second)
 
 	for {
@@ -176,7 +241,7 @@ func SaveMetricsInFileAgent(storage handler.Repository, fileStoragePath string, 
 	}
 }
 
-func saveMetricsInFile(repo handler.Repository, fileStoragePath string) error {
+func saveMetricsInFile(repo service.Repository, fileStoragePath string) error {
 	metrics, err := repo.GetAllMetrics()
 	if err != nil {
 		return fmt.Errorf("failed to get metrics: %v", err)

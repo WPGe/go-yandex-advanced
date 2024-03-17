@@ -3,12 +3,14 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"log"
 	"os"
 	"sync"
+
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
+
+	"github.com/WPGe/go-yandex-advanced/internal/entity"
 )
 
 type MemStorage struct {

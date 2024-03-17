@@ -1,16 +1,18 @@
 package main
 
 import (
-	"github.com/WPGe/go-yandex-advanced/internal/agent"
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/handler"
-	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 	"log"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/WPGe/go-yandex-advanced/internal/agent"
+	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/handler"
+	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
 
 func TestAgent_MetricAgent(t *testing.T) {
@@ -32,7 +34,8 @@ func TestAgent_MetricAgent(t *testing.T) {
 	defer server.Close()
 
 	stopCh := make(chan struct{})
-	go agent.MetricAgent(agentStorage, server.URL+"/updates", 2, 10, stopCh, logger)
+	agentStruct := agent.NewAgent(logger, agentStorage, server.URL+"/updates")
+	agentStruct.MetricAgent(10, 2, stopCh)
 
 	time.Sleep(1 * time.Second)
 	close(stopCh)

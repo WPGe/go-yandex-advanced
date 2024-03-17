@@ -1,18 +1,20 @@
 package main
 
 import (
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
-	"github.com/WPGe/go-yandex-advanced/internal/handler"
-	"github.com/WPGe/go-yandex-advanced/internal/storage"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"log"
-	"net/http"
-	"net/http/httptest"
-	"testing"
+
+	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/handler"
+	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
 
 func float64Ptr(f float64) *float64 {
