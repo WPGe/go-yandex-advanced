@@ -46,7 +46,7 @@ func (s *Server) InitHandlers(srv handler.Service, db *sql.DB) {
 	r.Get("/value/{type}/{name}", utils.WithGzip(utils.WithLogging(handler.MetricGetHandler(srv, s.logger), sugar)))
 	r.Post("/value/", utils.WithGzip(utils.WithLogging(handler.MetricPostHandler(srv, s.logger), sugar)))
 	r.Get("/", utils.WithGzip(utils.WithLogging(handler.MetricGetAllHandler(srv, s.logger), sugar)))
-	r.Get("/ping", handler.PingDb(db, s.logger))
+	r.Get("/ping", handler.PingDB(db, s.logger))
 
 	s.srv.Handler = r
 }

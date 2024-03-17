@@ -187,7 +187,7 @@ func MetricGetAllHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 	}
 }
 
-func PingDb(db *sql.DB, logger *zap.Logger) http.HandlerFunc {
+func PingDB(db *sql.DB, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if db == nil {
 			return
