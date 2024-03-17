@@ -93,7 +93,7 @@ func Run() {
 				logger.Error("Close db error", zap.Error(err))
 			}
 		}(db)
-		repo = storage.NewDbStorage(logger, db)
+		repo = storage.NewDBStorage(logger, db)
 	} else {
 		if cfg.Restore {
 			repo = storage.NewMemStorageFromFile(filepath.Join(cfg.RootDir, cfg.FileStoragePath), logger)

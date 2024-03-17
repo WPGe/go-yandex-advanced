@@ -10,15 +10,15 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 )
 
-type DbStorage struct {
+type DBStorage struct {
 	mu      sync.RWMutex
 	metrics map[string]entity.Metric
 	db      *sql.DB
 	logger  *zap.Logger
 }
 
-func NewDbStorage(logger *zap.Logger, db *sql.DB) *DbStorage {
-	return &DbStorage{
+func NewDBStorage(logger *zap.Logger, db *sql.DB) *DBStorage {
+	return &DBStorage{
 		metrics: make(map[string]entity.Metric),
 		db:      db,
 		logger:  logger,
@@ -78,7 +78,7 @@ func add(tx *sql.Tx, logger *zap.Logger, metric entity.Metric) error {
 	return nil
 }
 
-func (storage *DbStorage) AddMetric(metric entity.Metric) error {
+func (storage *DBStorage) AddMetric(metric entity.Metric) error {
 	tx, err := storage.db.Begin()
 	if err != nil {
 		storage.logger.Error("Add: begin transaction error", zap.Error(err))
@@ -96,7 +96,7 @@ func (storage *DbStorage) AddMetric(metric entity.Metric) error {
 	return nil
 }
 
-func (storage *DbStorage) AddMetrics(metrics []entity.Metric) error {
+func (storage *DBStorage) AddMetrics(metrics []entity.Metric) error {
 	tx, err := storage.db.Begin()
 	if err != nil {
 		storage.logger.Error("Add metrics: begin transaction error", zap.Error(err))
@@ -118,7 +118,7 @@ func (storage *DbStorage) AddMetrics(metrics []entity.Metric) error {
 	return nil
 }
 
-func (storage *DbStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
+func (storage *DBStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
 	var mID, mType string
 	var mDelta sql.NullInt64
 	var mValue sql.NullFloat64
@@ -138,7 +138,7 @@ func (storage *DbStorage) GetMetric(id, metricType string) (*entity.Metric, erro
 	}, nil
 }
 
-func (storage *DbStorage) GetAllMetrics() (entity.MetricsStore, error) {
+func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
 	rows, err := storage.db.Query("SELECT id, type, delta, value FROM metrics")
 	if err != nil {
 		storage.logger.Error("GetAll: select error", zap.Error(err))
@@ -180,7 +180,7 @@ func (storage *DbStorage) GetAllMetrics() (entity.MetricsStore, error) {
 	return metrics, err
 }
 
-func (storage *DbStorage) ClearMetrics() error {
+func (storage *DBStorage) ClearMetrics() error {
 	storage.mu.Lock()
 	defer storage.mu.Unlock()
 	storage.metrics = make(map[string]entity.Metric)

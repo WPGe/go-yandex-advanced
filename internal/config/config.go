@@ -58,7 +58,7 @@ func parseServerFlags() Config {
 	flagStoreInterval := flag.Int64("i", 300, "time interval when metrics saved to file")
 	flagFileStoragePath := flag.String("f", "/tmp/metrics-db.json", "filepath where the current metrics are saved")
 	flagRestore := flag.Bool("r", true, "load previously saved metrics from a file at startup")
-	flagDatabaseDSN := flag.String("d", "postgres://metric:metric@localhost:5432/metric?sslmode=disable", "database DSN")
+	flagDatabaseDSN := flag.String("d", "", "database DSN")
 	flag.Parse()
 
 	return Config{
