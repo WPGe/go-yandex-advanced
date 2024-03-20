@@ -33,9 +33,9 @@ func TestAgent_MetricAgent(t *testing.T) {
 
 	stopCh := make(chan struct{})
 	agentStruct := agent.NewAgent(logger, agentStorage, server.URL+"/updates")
-	agentStruct.MetricAgent(4, 2, stopCh)
+	go agentStruct.MetricAgent(1, 1, stopCh)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 	close(stopCh)
 
 	assert.Equal(t, agentStorage, serverStorage)
