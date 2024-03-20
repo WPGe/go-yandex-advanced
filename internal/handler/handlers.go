@@ -107,13 +107,13 @@ func MetricGetHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 
 		switch metricType {
 		case entity.Gauge:
-			if _, err := io.WriteString(w, fmt.Sprintf("%s: %g", entity.Gauge, *resultMetric.Value)); err != nil {
+			if _, err := io.WriteString(w, fmt.Sprintf("%g", *resultMetric.Value)); err != nil {
 				logger.Error("Get: Output error", zap.Error(err))
 				http.Error(w, "Output error", http.StatusBadRequest)
 				return
 			}
 		case entity.Counter:
-			if _, err := io.WriteString(w, fmt.Sprintf("%s: %d", entity.Counter, *resultMetric.Delta)); err != nil {
+			if _, err := io.WriteString(w, fmt.Sprintf("%d", *resultMetric.Delta)); err != nil {
 				logger.Error("Get: Output error", zap.Error(err))
 				http.Error(w, "Output error", http.StatusBadRequest)
 				return

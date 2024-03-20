@@ -88,6 +88,12 @@ func (m *MemStorage) AddMetric(metric entity.Metric) error {
 		return errors.New("delta cannot be nil for counter metric")
 	}
 
+	_, ok = m.metrics[metric.MType][metric.ID]
+	if !ok {
+		m.metrics[metric.MType][metric.ID] = metric
+		return nil
+	}
+
 	existingMetric = m.metrics[metric.MType][metric.ID]
 	if existingMetric.Delta == nil {
 		existingMetric.Delta = new(int64)
@@ -100,9 +106,6 @@ func (m *MemStorage) AddMetric(metric entity.Metric) error {
 }
 
 func (m *MemStorage) AddMetrics(metrics []entity.Metric) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	for _, metric := range metrics {
 		err := m.AddMetric(metric)
 		if err != nil {

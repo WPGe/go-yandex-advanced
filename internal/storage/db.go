@@ -86,7 +86,10 @@ func (storage *DBStorage) AddMetric(metric entity.Metric) error {
 	}
 	if err := add(tx, storage.logger, metric); err != nil {
 		storage.logger.Error("Add: data error", zap.Error(err))
-		tx.Rollback()
+		err := tx.Rollback()
+		if err != nil {
+			return err
+		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -106,7 +109,10 @@ func (storage *DBStorage) AddMetrics(metrics []entity.Metric) error {
 	for _, metric := range metrics {
 		if err := add(tx, storage.logger, metric); err != nil {
 			storage.logger.Error("Add metrics: data error", zap.Error(err))
-			tx.Rollback()
+			err := tx.Rollback()
+			if err != nil {
+				return err
+			}
 			return err
 		}
 	}
