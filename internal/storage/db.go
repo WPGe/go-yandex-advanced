@@ -86,10 +86,7 @@ func (storage *DBStorage) AddMetric(metric entity.Metric) error {
 	}
 	if err := add(tx, storage.logger, metric); err != nil {
 		storage.logger.Error("Add: data error", zap.Error(err))
-		err := tx.Rollback()
-		if err != nil {
-			return err
-		}
+		tx.Rollback()
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -109,10 +106,7 @@ func (storage *DBStorage) AddMetrics(metrics []entity.Metric) error {
 	for _, metric := range metrics {
 		if err := add(tx, storage.logger, metric); err != nil {
 			storage.logger.Error("Add metrics: data error", zap.Error(err))
-			err := tx.Rollback()
-			if err != nil {
-				return err
-			}
+			tx.Rollback()
 			return err
 		}
 	}
@@ -186,6 +180,11 @@ func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
 				Value: parseValue(mValue),
 			}
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		storage.logger.Error("GetAll: rows error", zap.Error(err))
+		return nil, err
 	}
 
 	return metrics, err
