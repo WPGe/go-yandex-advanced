@@ -22,12 +22,7 @@ func TestAgent_MetricAgent(t *testing.T) {
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
 	}
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
+	logger.Sync()
 
 	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
 	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)

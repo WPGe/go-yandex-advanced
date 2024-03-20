@@ -37,12 +37,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
 	}
-	defer func(logger *zap.Logger) {
-		err := logger.Sync()
-		if err != nil {
-			panic(err)
-		}
-	}(logger)
+	logger.Sync()
 
 	testCases := []struct {
 		name    string
