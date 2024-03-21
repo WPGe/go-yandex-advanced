@@ -71,6 +71,10 @@ func (a *Agent) MetricAgent(reportInterval time.Duration, pollInterval time.Dura
 			sendTicker.Stop()
 			return
 		case <-stopCh:
+			err := a.sendMetrics()
+			if err != nil {
+				a.logger.Error("Send error:", zap.Error(err))
+			}
 			pollTicker.Stop()
 			sendTicker.Stop()
 			return
