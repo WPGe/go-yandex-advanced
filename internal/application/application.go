@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 	"database/sql"
-	"github.com/WPGe/go-yandex-advanced/internal/utils"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -22,6 +25,7 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/service"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
+	"github.com/WPGe/go-yandex-advanced/internal/utils"
 )
 
 var sugar zap.SugaredLogger
@@ -133,6 +137,20 @@ func ConnectDB(cfg *config.Config) (*sql.DB, error) {
 	}
 
 	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	instance, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := migrate.NewWithDatabaseInstance("file://migrations/pg", "postgres", instance)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return nil, err
 	}
 
