@@ -1,28 +1,44 @@
 package main
 
 import (
+	"github.com/WPGe/go-yandex-advanced/internal/service"
+	"github.com/WPGe/go-yandex-advanced/internal/utils"
+	"log"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
 	"github.com/WPGe/go-yandex-advanced/internal/agent"
 	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"github.com/stretchr/testify/assert"
-	"net/http/httptest"
-	"testing"
-	"time"
 )
 
 func TestAgent_MetricAgent(t *testing.T) {
-	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]entity.Metric))
-	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]entity.Metric))
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("can't initialize zap logger: %v", err)
+	}
+	logger.Sync()
 
-	server := httptest.NewServer(handler.MetricUpdateHandler(serverStorage))
+	agentStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
+	serverStorage := storage.NewMemStorageWithMetrics(make(map[string]map[string]entity.Metric), logger)
+
+	srv := service.New(serverStorage)
+	server := httptest.NewServer(utils.WithGzip(handler.MetricUpdatesHandler(srv, logger)))
 	defer server.Close()
 
 	stopCh := make(chan struct{})
-	go agent.MetricAgent(agentStorage, server.URL+"/update", 2, 10, stopCh)
+	agentStruct := agent.NewAgent(logger, agentStorage, server.URL+"/updates")
+	go agentStruct.MetricAgent(10, 1, stopCh)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	close(stopCh)
+
+	time.Sleep(2 * time.Second)
 
 	assert.Equal(t, agentStorage, serverStorage)
 }

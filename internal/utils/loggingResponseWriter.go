@@ -1,4 +1,4 @@
-package handler
+package utils
 
 import "net/http"
 
@@ -25,3 +25,5 @@ func (r *LoggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
 	r.ResponseData.status = statusCode
 }
+
+/// ОТМЕТКА О ТОМ, ЧТО НУЖНО ОБРАТИТЬ ВНИМАНИЕ ПРИ РЕВЬЮ
