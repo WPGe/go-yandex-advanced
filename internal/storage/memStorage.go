@@ -10,23 +10,23 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 )
 
 type MemStorage struct {
 	mu      sync.RWMutex
-	metrics entity.MetricsStore
+	metrics model.MetricsStore
 	logger  *zap.Logger
 }
 
 func NewMemStorage(logger *zap.Logger) *MemStorage {
 	return &MemStorage{
-		metrics: make(entity.MetricsStore),
+		metrics: make(model.MetricsStore),
 		logger:  logger,
 	}
 }
 
-func NewMemStorageWithMetrics(initialMetrics entity.MetricsStore, logger *zap.Logger) *MemStorage {
+func NewMemStorageWithMetrics(initialMetrics model.MetricsStore, logger *zap.Logger) *MemStorage {
 	return &MemStorage{
 		metrics: initialMetrics,
 		logger:  logger,
@@ -53,11 +53,11 @@ func NewMemStorageFromFile(fileStoragePath string, logger *zap.Logger) *MemStora
 
 	if fileStat.Size() == 0 {
 		// Файл пустой, возвращаем MemStorage с пустым map
-		return NewMemStorageWithMetrics(make(entity.MetricsStore), logger)
+		return NewMemStorageWithMetrics(make(model.MetricsStore), logger)
 	}
 
 	decoder := json.NewDecoder(file)
-	initialMetrics := entity.MetricsStore{}
+	initialMetrics := model.MetricsStore{}
 	if err := decoder.Decode(&initialMetrics); err != nil {
 		log.Fatalf("%+v", errors.Wrap(err, "failed to decode metrics"))
 	}
@@ -65,21 +65,21 @@ func NewMemStorageFromFile(fileStoragePath string, logger *zap.Logger) *MemStora
 	return NewMemStorageWithMetrics(initialMetrics, logger)
 }
 
-func (m *MemStorage) AddMetric(metric entity.Metric) error {
+func (m *MemStorage) AddMetric(metric model.Metric) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var existingMetric entity.Metric
+	var existingMetric model.Metric
 
 	_, ok := m.metrics[metric.MType]
 	if !ok {
-		m.metrics[metric.MType] = map[string]entity.Metric{
+		m.metrics[metric.MType] = map[string]model.Metric{
 			metric.ID: metric,
 		}
 		return nil
 	}
 
-	if metric.MType == entity.Gauge {
+	if metric.MType == model.Gauge {
 		m.metrics[metric.MType][metric.ID] = metric
 		return nil
 	}
@@ -105,7 +105,7 @@ func (m *MemStorage) AddMetric(metric entity.Metric) error {
 	return nil
 }
 
-func (m *MemStorage) AddMetrics(metrics []entity.Metric) error {
+func (m *MemStorage) AddMetrics(metrics []model.Metric) error {
 	for _, metric := range metrics {
 		err := m.AddMetric(metric)
 		if err != nil {
@@ -116,7 +116,7 @@ func (m *MemStorage) AddMetrics(metrics []entity.Metric) error {
 	return nil
 }
 
-func (m *MemStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
+func (m *MemStorage) GetMetric(id, metricType string) (*model.Metric, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -131,7 +131,7 @@ func (m *MemStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
 	return &metric, nil
 }
 
-func (m *MemStorage) GetAllMetrics() (entity.MetricsStore, error) {
+func (m *MemStorage) GetAllMetrics() (model.MetricsStore, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.metrics, nil
@@ -140,7 +140,7 @@ func (m *MemStorage) GetAllMetrics() (entity.MetricsStore, error) {
 func (m *MemStorage) ClearMetrics() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.metrics = make(entity.MetricsStore)
+	m.metrics = make(model.MetricsStore)
 
 	return nil
 }

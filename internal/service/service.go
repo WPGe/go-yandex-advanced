@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 )
 
 type Repository interface {
-	AddMetric(metric entity.Metric) error
-	AddMetrics(metric []entity.Metric) error
-	GetMetric(id, metricType string) (*entity.Metric, error)
-	GetAllMetrics() (entity.MetricsStore, error)
+	AddMetric(metric model.Metric) error
+	AddMetrics(metric []model.Metric) error
+	GetMetric(id, metricType string) (*model.Metric, error)
+	GetAllMetrics() (model.MetricsStore, error)
 }
 
 type Service struct {
@@ -22,8 +22,8 @@ func New(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetMetric(id, mType string) (*entity.Metric, error) {
-	var m *entity.Metric
+func (s *Service) GetMetric(id, mType string) (*model.Metric, error) {
+	var m *model.Metric
 	var err error
 	err = s.Retry(3, func() error {
 		m, err = s.repo.GetMetric(id, mType)
@@ -38,8 +38,8 @@ func (s *Service) GetMetric(id, mType string) (*entity.Metric, error) {
 	return m, nil
 }
 
-func (s *Service) GetAllMetrics() (entity.MetricsStore, error) {
-	var m entity.MetricsStore
+func (s *Service) GetAllMetrics() (model.MetricsStore, error) {
+	var m model.MetricsStore
 	var err error
 	err = s.Retry(3, func() error {
 		m, err = s.repo.GetAllMetrics()
@@ -54,7 +54,7 @@ func (s *Service) GetAllMetrics() (entity.MetricsStore, error) {
 	return m, nil
 }
 
-func (s *Service) AddMetric(m entity.Metric) error {
+func (s *Service) AddMetric(m model.Metric) error {
 	err := s.Retry(3, func() error {
 		if err := s.repo.AddMetric(m); err != nil {
 			return err
@@ -67,7 +67,7 @@ func (s *Service) AddMetric(m entity.Metric) error {
 	return nil
 }
 
-func (s *Service) AddMetrics(m []entity.Metric) error {
+func (s *Service) AddMetrics(m []model.Metric) error {
 	err := s.Retry(3, func() error {
 		if err := s.repo.AddMetrics(m); err != nil {
 			return err

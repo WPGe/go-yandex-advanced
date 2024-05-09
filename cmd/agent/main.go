@@ -34,6 +34,6 @@ func main() {
 
 	stopCh := make(chan struct{})
 
-	agentStruct := agent.NewAgent(logger, memStorage, "http://"+cfg.Address+"/updates")
+	agentStruct := agent.NewAgent(logger, memStorage, "http://"+cfg.Address+"/updates", cfg.HashKey)
 	agentStruct.MetricAgent(time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh)
 }

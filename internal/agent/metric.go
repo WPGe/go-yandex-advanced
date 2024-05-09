@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,7 +21,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 	"github.com/WPGe/go-yandex-advanced/internal/service"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
@@ -27,13 +30,15 @@ type Agent struct {
 	logger   *zap.Logger
 	storage  *storage.MemStorage
 	hookPath string
+	hashKey  string
 }
 
-func NewAgent(logger *zap.Logger, storage *storage.MemStorage, hookPath string) *Agent {
+func NewAgent(logger *zap.Logger, storage *storage.MemStorage, hookPath string, hashKey string) *Agent {
 	return &Agent{
 		logger:   logger,
 		storage:  storage,
 		hookPath: hookPath,
+		hashKey:  hashKey,
 	}
 }
 
@@ -146,8 +151,8 @@ func (a *Agent) collectGaugeRuntimeMetrics() {
 }
 
 func (a *Agent) addGaugeMetricToStorage(name string, value float64) {
-	metric := entity.Metric{
-		MType: entity.Gauge,
+	metric := model.Metric{
+		MType: model.Gauge,
 		ID:    name,
 		Value: &value,
 	}
@@ -159,8 +164,8 @@ func (a *Agent) addGaugeMetricToStorage(name string, value float64) {
 }
 
 func (a *Agent) addCounterMetricToStorage(name string, value int64) {
-	metric := entity.Metric{
-		MType: entity.Counter,
+	metric := model.Metric{
+		MType: model.Counter,
 		ID:    name,
 		Delta: &value,
 	}
@@ -182,7 +187,7 @@ func (a *Agent) sendMetrics() error {
 		return err
 	}
 
-	var metricsForSend []entity.Metric
+	var metricsForSend []model.Metric
 	for _, typedMetrics := range allMetrics {
 		for _, metric := range typedMetrics {
 			metricsForSend = append(metricsForSend, metric)
@@ -213,6 +218,14 @@ func (a *Agent) sendMetrics() error {
 	req.URL = url
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
+
+	if a.hashKey != "" {
+		h := hmac.New(sha256.New, []byte(a.hashKey))
+		h.Write(jsonMetrics)
+		hash := h.Sum(nil)
+		req.Header.Set("HashSHA256", hex.EncodeToString(hash))
+	}
+
 	req.SetBody(gzippedMetric.Bytes())
 
 	res, err := req.Send()
@@ -237,9 +250,6 @@ func SaveMetricsInFileAgent(storage service.Repository, fileStoragePath string, 
 				return fmt.Errorf("failed to save metrics: %v", err)
 			}
 		case <-ctx.Done():
-			if err := saveMetricsInFile(storage, fileStoragePath); err != nil {
-				return fmt.Errorf("failed to save metrics: %v", err)
-			}
 			return nil
 		}
 	}

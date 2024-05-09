@@ -18,6 +18,7 @@ type Config struct {
 	DatabaseDSN     string `env:"DATABASE_DSN"`
 	ReportInterval  int    `env:"REPORT_INTERVAL"`
 	PollInterval    int    `env:"POLL_INTERVAL"`
+	HashKey         string `env:"KEY"`
 }
 
 func NewServer() (Config, error) {
@@ -47,6 +48,9 @@ func NewServer() (Config, error) {
 	if config.DatabaseDSN == "" {
 		config.DatabaseDSN = flags.DatabaseDSN
 	}
+	if config.HashKey == "" {
+		config.HashKey = flags.HashKey
+	}
 
 	startDebugLogs()
 
@@ -58,7 +62,8 @@ func parseServerFlags() Config {
 	flagStoreInterval := flag.Int64("i", 300, "time interval when metrics saved to file")
 	flagFileStoragePath := flag.String("f", "/tmp/metrics-db.json", "filepath where the current metrics are saved")
 	flagRestore := flag.Bool("r", true, "load previously saved metrics from a file at startup")
-	flagDatabaseDSN := flag.String("d", "", "database DSN")
+	flagDatabaseDSN := flag.String("d", "postgres://postgres:postgres@localhost:5432/praktikum?sslmode=disable", "database DSN")
+	flagHashKey := flag.String("k", "supersecretkey", "hash key")
 	flag.Parse()
 
 	return Config{
@@ -67,6 +72,7 @@ func parseServerFlags() Config {
 		FileStoragePath: *flagFileStoragePath,
 		Restore:         *flagRestore,
 		DatabaseDSN:     *flagDatabaseDSN,
+		HashKey:         *flagHashKey,
 	}
 }
 
@@ -91,6 +97,9 @@ func NewAgent() (Config, error) {
 	if config.PollInterval == 0 {
 		config.PollInterval = flags.PollInterval
 	}
+	if config.HashKey == "" {
+		config.HashKey = flags.HashKey
+	}
 
 	startDebugLogs()
 
@@ -101,12 +110,14 @@ func parseAgentFlags() Config {
 	flagRunAddr := flag.String("a", "localhost:8080", "address and port to run server")
 	flagReportInterval := flag.Int("r", 10, "report interval")
 	flagPollInterval := flag.Int("p", 2, "poll interval")
+	flagHashKey := flag.String("k", "supersecretkey", "hash key")
 	flag.Parse()
 
 	return Config{
 		Address:        *flagRunAddr,
 		ReportInterval: *flagReportInterval,
 		PollInterval:   *flagPollInterval,
+		HashKey:        *flagHashKey,
 	}
 }
 
