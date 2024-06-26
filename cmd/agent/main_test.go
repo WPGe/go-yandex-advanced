@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"github.com/WPGe/go-yandex-advanced/internal/model"
 	"github.com/WPGe/go-yandex-advanced/internal/service"
 	"github.com/WPGe/go-yandex-advanced/internal/utils"
 	"log"
 	"net/http/httptest"
+	"os/signal"
+	"syscall"
 	"testing"
 	"time"
 
@@ -34,10 +37,20 @@ func TestAgent_MetricAgent(t *testing.T) {
 	defer server.Close()
 
 	stopCh := make(chan struct{})
-	agentStruct := agent.NewAgent(logger, agentStorage, server.URL+"/updates", "")
-	go agentStruct.MetricAgent(10, 1, stopCh)
 
-	time.Sleep(2 * time.Second)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	agentStruct := agent.NewAgent(
+		logger, agentStorage,
+		server.URL+"/updates",
+		"",
+		time.Duration(3),
+		time.Duration(2),
+		3)
+	agentStruct.MetricAgent(ctx, stopCh)
+
+	time.Sleep(3*time.Second + 500*time.Millisecond)
 	close(stopCh)
 
 	time.Sleep(2 * time.Second)

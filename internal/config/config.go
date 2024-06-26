@@ -19,6 +19,7 @@ type Config struct {
 	ReportInterval  int    `env:"REPORT_INTERVAL"`
 	PollInterval    int    `env:"POLL_INTERVAL"`
 	HashKey         string `env:"KEY"`
+	RateLimit       int    `env:"RATE_LIMIT"`
 }
 
 func NewServer() (Config, error) {
@@ -100,6 +101,9 @@ func NewAgent() (Config, error) {
 	if config.HashKey == "" {
 		config.HashKey = flags.HashKey
 	}
+	if config.RateLimit == 0 {
+		config.RateLimit = flags.RateLimit
+	}
 
 	startDebugLogs()
 
@@ -111,6 +115,7 @@ func parseAgentFlags() Config {
 	flagReportInterval := flag.Int("r", 10, "report interval")
 	flagPollInterval := flag.Int("p", 2, "poll interval")
 	flagHashKey := flag.String("k", "supersecretkey", "hash key")
+	flagRateLimit := flag.Int("l", 3, "rate limit")
 	flag.Parse()
 
 	return Config{
@@ -118,6 +123,7 @@ func parseAgentFlags() Config {
 		ReportInterval: *flagReportInterval,
 		PollInterval:   *flagPollInterval,
 		HashKey:        *flagHashKey,
+		RateLimit:      *flagRateLimit,
 	}
 }
 

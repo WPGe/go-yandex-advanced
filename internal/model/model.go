@@ -12,6 +12,22 @@ type Metric struct {
 	Value *float64 `json:"value,omitempty" db:"value"`
 }
 
+func NewGaugeMetric(name string, value float64) Metric {
+	return Metric{
+		MType: Gauge,
+		ID:    name,
+		Value: &value,
+	}
+}
+
+func NewCounterMetric(name string, value int64) Metric {
+	return Metric{
+		MType: Counter,
+		ID:    name,
+		Delta: &value,
+	}
+}
+
 type MetricsStore map[string]map[string]Metric
 
 type Error struct {

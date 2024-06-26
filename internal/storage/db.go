@@ -91,7 +91,7 @@ func (storage *DBStorage) GetMetric(id, metricType string) (*model.Metric, error
 	row := storage.db.QueryRow("SELECT id, type, delta, value FROM metrics WHERE id = $1 AND type = $2", id, metricType)
 	err := row.Scan(&mID, &mType, &mDelta, &mValue)
 	if err != nil {
-		storage.logger.Error("Get: scan row error", zap.Error(err))
+		storage.logger.Error("Get: scan row error", zap.Error(err), zap.Any("id", id), zap.Any("type", metricType))
 		return nil, err
 	}
 
