@@ -9,15 +9,16 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 )
 
 func MetricUpdateHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.Info("Update: start")
 
-		var metric entity.Metric
+		var metric model.Metric
 		if r.Header.Get("Content-Type") == "application/json" {
 			decoder := json.NewDecoder(r.Body)
 			if err := decoder.Decode(&metric); err != nil {
@@ -37,7 +38,7 @@ func MetricUpdateHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 
 			var err error
 			switch metricType {
-			case entity.Gauge:
+			case model.Gauge:
 				var value float64
 				if value, err = strconv.ParseFloat(metricValue, 64); err != nil {
 					logger.Info("Update: Incorrect value")
@@ -45,7 +46,7 @@ func MetricUpdateHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 					return
 				}
 				metric.Value = &value
-			case entity.Counter:
+			case model.Counter:
 				var delta int64
 				if delta, err = strconv.ParseInt(metricValue, 10, 64); err != nil {
 					http.Error(w, "Incorrect value", http.StatusBadRequest)
@@ -74,7 +75,7 @@ func MetricUpdatesHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.Info("Update: start")
 
-		var metrics []entity.Metric
+		var metrics []model.Metric
 
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&metrics); err != nil {
@@ -106,13 +107,13 @@ func MetricGetHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 		}
 
 		switch metricType {
-		case entity.Gauge:
+		case model.Gauge:
 			if _, err := io.WriteString(w, fmt.Sprintf("%g", *resultMetric.Value)); err != nil {
 				logger.Error("Get: Output error", zap.Error(err))
 				http.Error(w, "Output error", http.StatusBadRequest)
 				return
 			}
-		case entity.Counter:
+		case model.Counter:
 			if _, err := io.WriteString(w, fmt.Sprintf("%d", *resultMetric.Delta)); err != nil {
 				logger.Error("Get: Output error", zap.Error(err))
 				http.Error(w, "Output error", http.StatusBadRequest)
@@ -125,7 +126,7 @@ func MetricGetHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 
 func MetricPostHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var incomingMetric entity.Metric
+		var incomingMetric model.Metric
 
 		if err := json.NewDecoder(r.Body).Decode(&incomingMetric); err != nil {
 			logger.Error("Get: Invalid JSON format", zap.Error(err))
@@ -161,19 +162,19 @@ func MetricGetAllHandler(srv Service, logger *zap.Logger) http.HandlerFunc {
 			logger.Fatal("Get all: error", zap.Error(err))
 		}
 
-		if resultMetrics[entity.Gauge] != nil {
-			for _, metric := range resultMetrics[entity.Gauge] {
+		if resultMetrics[model.Gauge] != nil {
+			for _, metric := range resultMetrics[model.Gauge] {
 				logger.Info("metric", zap.Any("metric", metric))
-				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%s}}: {{%g}}\n", entity.Gauge, metric.ID, *metric.Value)); err != nil {
+				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%s}}: {{%g}}\n", model.Gauge, metric.ID, *metric.Value)); err != nil {
 					logger.Error("Get all: print error", zap.Error(err))
 					http.Error(w, "Output error", http.StatusBadRequest)
 					return
 				}
 			}
 		}
-		if resultMetrics[entity.Counter] != nil {
-			for _, metric := range resultMetrics[entity.Counter] {
-				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%s}}: {{%d}}\n", entity.Counter, metric.ID, *metric.Delta)); err != nil {
+		if resultMetrics[model.Counter] != nil {
+			for _, metric := range resultMetrics[model.Counter] {
+				if _, err := io.WriteString(w, fmt.Sprintf("{{%s}}: {{%s}}: {{%d}}\n", model.Counter, metric.ID, *metric.Delta)); err != nil {
 					logger.Error("Get all: print error", zap.Error(err))
 					http.Error(w, "Output error", http.StatusBadRequest)
 					return

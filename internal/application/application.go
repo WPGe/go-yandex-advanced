@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/WPGe/go-yandex-advanced/internal/utils"
 	"log"
 	"net/http"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/service"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
-	"github.com/WPGe/go-yandex-advanced/internal/utils"
 )
 
 var sugar zap.SugaredLogger
@@ -42,15 +42,27 @@ func NewServer(log *zap.Logger, addr string) *Server {
 	}
 }
 
-func (s *Server) InitHandlers(srv handler.Service, db *sql.DB) {
+func (s *Server) InitHandlers(srv handler.Service, db *sql.DB, hashKey string) {
+	updateHandler := handler.MetricUpdateHandler(srv, s.logger)
+	updatesHandler := handler.MetricUpdatesHandler(srv, s.logger)
+	getHandler := handler.MetricGetHandler(srv, s.logger)
+	postHandler := handler.MetricPostHandler(srv, s.logger)
+	getAllHandler := handler.MetricGetAllHandler(srv, s.logger)
+	pingHandler := handler.PingDB(db, s.logger)
+
 	r := chi.NewRouter()
-	r.Post("/update/", utils.WithGzip(utils.WithLogging(handler.MetricUpdateHandler(srv, s.logger), sugar)))
-	r.Post("/updates/", utils.WithGzip(utils.WithLogging(handler.MetricUpdatesHandler(srv, s.logger), sugar)))
-	r.Post("/update/{type}/{name}/{value}", utils.WithGzip(utils.WithLogging(handler.MetricUpdateHandler(srv, s.logger), sugar)))
-	r.Get("/value/{type}/{name}", utils.WithGzip(utils.WithLogging(handler.MetricGetHandler(srv, s.logger), sugar)))
-	r.Post("/value/", utils.WithGzip(utils.WithLogging(handler.MetricPostHandler(srv, s.logger), sugar)))
-	r.Get("/", utils.WithGzip(utils.WithLogging(handler.MetricGetAllHandler(srv, s.logger), sugar)))
-	r.Get("/ping", handler.PingDB(db, s.logger))
+	r.Route("/", func(r chi.Router) {
+		r.Use(utils.WithGzip())
+		r.Use(utils.WithLogging(sugar))
+		r.Use(utils.WithHash(hashKey))
+		r.Method(http.MethodPost, "/update/", updateHandler)
+		r.Method(http.MethodPost, "/updates/", updatesHandler)
+		r.Method(http.MethodPost, "/update/{type}/{name}/{value}", updateHandler)
+		r.Method(http.MethodGet, "/value/{type}/{name}", getHandler)
+		r.Method(http.MethodPost, "/value/", postHandler)
+		r.Method(http.MethodGet, "/", getAllHandler)
+		r.Method(http.MethodGet, "/ping", pingHandler)
+	})
 
 	s.srv.Handler = r
 }
@@ -108,7 +120,7 @@ func Run() {
 
 	srv := service.New(repo)
 	server := NewServer(logger, cfg.Address)
-	server.InitHandlers(srv, db)
+	server.InitHandlers(srv, db, cfg.HashKey)
 
 	logger.Info("Starting server", zap.String("addr", cfg.Address))
 

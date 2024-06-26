@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -34,6 +37,21 @@ func main() {
 
 	stopCh := make(chan struct{})
 
-	agentStruct := agent.NewAgent(logger, memStorage, "http://"+cfg.Address+"/updates")
-	agentStruct.MetricAgent(time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh)
+	/*agentStruct := agent.NewAgent(logger, memStorage, "http://"+cfg.Address+"/updates", cfg.HashKey)
+	agentStruct.MetricAgent(time.Duration(cfg.ReportInterval), time.Duration(cfg.PollInterval), stopCh)*/
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	agentStruct := agent.NewAgent(
+		logger, memStorage,
+		"http://"+cfg.Address+"/updates",
+		cfg.HashKey,
+		time.Duration(cfg.ReportInterval),
+		time.Duration(cfg.PollInterval),
+		cfg.RateLimit)
+	agentStruct.MetricAgent(ctx, stopCh)
+
+	<-ctx.Done()
+	logger.Info("Finished collecting metrics")
 }

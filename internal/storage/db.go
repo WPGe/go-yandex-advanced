@@ -4,81 +4,46 @@ import (
 	"database/sql"
 	"sync"
 
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 )
 
 type DBStorage struct {
 	mu      sync.RWMutex
-	metrics map[string]entity.Metric
+	metrics map[string]model.Metric
 	db      *sql.DB
 	logger  *zap.Logger
 }
 
 func NewDBStorage(logger *zap.Logger, db *sql.DB) *DBStorage {
 	return &DBStorage{
-		metrics: make(map[string]entity.Metric),
+		metrics: make(map[string]model.Metric),
 		db:      db,
 		logger:  logger,
 	}
 }
 
-func add(tx *sql.Tx, logger *zap.Logger, metric entity.Metric) error {
+func add(tx *sql.Tx, logger *zap.Logger, metric model.Metric) error {
+	var err error
 
-	var mID, mType string
-	var mDelta sql.NullInt64
-
-	row := tx.QueryRow("SELECT id, type, delta FROM metrics WHERE id = $1 AND type = $2", metric.ID, metric.MType)
-	err := row.Scan(&mID, &mType, &mDelta)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		logger.Error("Add: scan row error", zap.Error(err))
+	_, err = tx.Exec(
+		"INSERT INTO metrics (id, type, delta, value) VALUES ($1, $2, $3, $4)"+
+			"ON CONFLICT (id, type)"+
+			"DO UPDATE "+
+			"SET delta = COALESCE(metrics.delta, NULL) + COALESCE(excluded.delta, NULL),"+
+			"value = excluded.value",
+		metric.ID, metric.MType, metric.Delta, metric.Value,
+	)
+	if err != nil {
+		logger.Error("add: error to add", zap.Error(err))
 		return err
-	}
-
-	if metric.MType == entity.Counter {
-		switch {
-		case mID != "":
-			_, err = tx.Exec(
-				"UPDATE metrics SET delta = $1 WHERE id = $2 AND type = $3",
-				mDelta.Int64+*metric.Delta, metric.ID, metric.MType,
-			)
-		default:
-			_, err = tx.Exec(
-				"INSERT INTO metrics (id, type, delta) VALUES ($1, $2, $3)",
-				metric.ID, metric.MType, *metric.Delta,
-			)
-		}
-		if err != nil {
-			logger.Error("add: error to add counter", zap.Error(err))
-			return err
-		}
-	}
-
-	if metric.MType == entity.Gauge {
-		switch {
-		case mID != "":
-			_, err = tx.Exec(
-				"UPDATE metrics SET value = $1 WHERE id = $2 AND type = $3",
-				metric.Value, metric.ID, metric.MType,
-			)
-		default:
-			_, err = tx.Exec(
-				"INSERT INTO metrics (id, type, value) VALUES ($1, $2, $3)",
-				metric.ID, metric.MType, *metric.Value,
-			)
-		}
-		if err != nil {
-			logger.Error("add: error to add gauge", zap.Error(err))
-			return err
-		}
 	}
 
 	return nil
 }
 
-func (storage *DBStorage) AddMetric(metric entity.Metric) error {
+func (storage *DBStorage) AddMetric(metric model.Metric) error {
 	tx, err := storage.db.Begin()
 	if err != nil {
 		storage.logger.Error("Add: begin transaction error", zap.Error(err))
@@ -86,7 +51,7 @@ func (storage *DBStorage) AddMetric(metric entity.Metric) error {
 	}
 	if err := add(tx, storage.logger, metric); err != nil {
 		storage.logger.Error("Add: data error", zap.Error(err))
-		tx.Rollback()
+		defer tx.Rollback()
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -96,7 +61,7 @@ func (storage *DBStorage) AddMetric(metric entity.Metric) error {
 	return nil
 }
 
-func (storage *DBStorage) AddMetrics(metrics []entity.Metric) error {
+func (storage *DBStorage) AddMetrics(metrics []model.Metric) error {
 	tx, err := storage.db.Begin()
 	if err != nil {
 		storage.logger.Error("Add metrics: begin transaction error", zap.Error(err))
@@ -118,7 +83,7 @@ func (storage *DBStorage) AddMetrics(metrics []entity.Metric) error {
 	return nil
 }
 
-func (storage *DBStorage) GetMetric(id, metricType string) (*entity.Metric, error) {
+func (storage *DBStorage) GetMetric(id, metricType string) (*model.Metric, error) {
 	var mID, mType string
 	var mDelta sql.NullInt64
 	var mValue sql.NullFloat64
@@ -126,11 +91,11 @@ func (storage *DBStorage) GetMetric(id, metricType string) (*entity.Metric, erro
 	row := storage.db.QueryRow("SELECT id, type, delta, value FROM metrics WHERE id = $1 AND type = $2", id, metricType)
 	err := row.Scan(&mID, &mType, &mDelta, &mValue)
 	if err != nil {
-		storage.logger.Error("Get: scan row error", zap.Error(err))
+		storage.logger.Error("Get: scan row error", zap.Error(err), zap.Any("id", id), zap.Any("type", metricType))
 		return nil, err
 	}
 
-	return &entity.Metric{
+	return &model.Metric{
 		ID:    mID,
 		MType: mType,
 		Delta: parseDelta(mDelta),
@@ -138,7 +103,7 @@ func (storage *DBStorage) GetMetric(id, metricType string) (*entity.Metric, erro
 	}, nil
 }
 
-func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
+func (storage *DBStorage) GetAllMetrics() (model.MetricsStore, error) {
 	rows, err := storage.db.Query("SELECT id, type, delta, value FROM metrics")
 	if err != nil {
 		storage.logger.Error("GetAll: select error", zap.Error(err))
@@ -151,34 +116,23 @@ func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
 		}
 	}(rows)
 
-	metrics := make(entity.MetricsStore)
+	metrics := make(model.MetricsStore)
 	for rows.Next() {
-		var mID, mType string
-		var mDelta sql.NullInt64
-		var mValue sql.NullFloat64
+		var m model.Metric
 
-		err := rows.Scan(&mID, &mType, &mDelta, &mValue)
+		err := rows.Scan(&m.ID, &m.MType, &m.Delta, &m.Value)
 		if err != nil {
 			storage.logger.Error("GetAll: scan row error", zap.Error(err))
 			return nil, err
 		}
-		_, ok := metrics[mType]
+
+		_, ok := metrics[m.MType]
 		if !ok {
-			metrics[mType] = map[string]entity.Metric{
-				mID: {
-					ID:    mID,
-					MType: mType,
-					Delta: parseDelta(mDelta),
-					Value: parseValue(mValue),
-				},
+			metrics[m.MType] = map[string]model.Metric{
+				m.ID: m,
 			}
 		} else {
-			metrics[mType][mID] = entity.Metric{
-				ID:    mID,
-				MType: mType,
-				Delta: parseDelta(mDelta),
-				Value: parseValue(mValue),
-			}
+			metrics[m.MType][m.ID] = m
 		}
 	}
 
@@ -193,7 +147,7 @@ func (storage *DBStorage) GetAllMetrics() (entity.MetricsStore, error) {
 func (storage *DBStorage) ClearMetrics() error {
 	storage.mu.Lock()
 	defer storage.mu.Unlock()
-	storage.metrics = make(map[string]entity.Metric)
+	storage.metrics = make(map[string]model.Metric)
 
 	return nil
 }

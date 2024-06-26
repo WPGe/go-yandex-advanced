@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/WPGe/go-yandex-advanced/internal/model"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	"github.com/WPGe/go-yandex-advanced/internal/entity"
 	"github.com/WPGe/go-yandex-advanced/internal/handler"
 	"github.com/WPGe/go-yandex-advanced/internal/storage"
 )
@@ -46,7 +46,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 	}{
 		{
 			name:    "empty type",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{}, logger),
 			want: want{
 				code:     http.StatusBadRequest,
 				request:  "/update/asdasd/asdasd/232",
@@ -55,7 +55,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name:    "empty name",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{}, logger),
 			want: want{
 				code:     http.StatusNotFound,
 				request:  "/update/gauge/",
@@ -64,7 +64,7 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name:    "incorrect value",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{}, logger),
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{}, logger),
 			want: want{
 				code:     http.StatusBadRequest,
 				request:  "/update/gauge/test1/asdasdasd",
@@ -73,9 +73,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name: "add exist gauge metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-				entity.Gauge: {"test1": {
-					MType: entity.Gauge,
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+				model.Gauge: {"test1": {
+					MType: model.Gauge,
 					ID:    "test1",
 					Value: float64Ptr(2.5),
 				}},
@@ -84,9 +84,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 				code:     http.StatusOK,
 				request:  "/update/gauge/test1/2",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-					entity.Gauge: {"test1": {
-						MType: entity.Gauge,
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+					model.Gauge: {"test1": {
+						MType: model.Gauge,
 						ID:    "test1",
 						Value: float64Ptr(2.0),
 					}},
@@ -95,9 +95,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name: "add not exist gauge metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-				entity.Gauge: {"test1": {
-					MType: entity.Gauge,
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+				model.Gauge: {"test1": {
+					MType: model.Gauge,
 					ID:    "test1",
 					Value: float64Ptr(2.5),
 				}},
@@ -106,15 +106,15 @@ func TestMetricUpdateHandler(t *testing.T) {
 				code:     http.StatusOK,
 				request:  "/update/gauge/test2/2",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-					entity.Gauge: {
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+					model.Gauge: {
 						"test1": {
-							MType: entity.Gauge,
+							MType: model.Gauge,
 							ID:    "test1",
 							Value: float64Ptr(2.5),
 						},
 						"test2": {
-							MType: entity.Gauge,
+							MType: model.Gauge,
 							ID:    "test2",
 							Value: float64Ptr(2.0),
 						},
@@ -124,9 +124,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name: "add not exist counter metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-				entity.Counter: {"test1": {
-					MType: entity.Counter,
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+				model.Counter: {"test1": {
+					MType: model.Counter,
 					ID:    "test1",
 					Delta: int64Ptr(2),
 				}},
@@ -135,15 +135,15 @@ func TestMetricUpdateHandler(t *testing.T) {
 				code:     http.StatusOK,
 				request:  "/update/counter/test2/3",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-					entity.Counter: {
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+					model.Counter: {
 						"test1": {
-							MType: entity.Counter,
+							MType: model.Counter,
 							ID:    "test1",
 							Delta: int64Ptr(2),
 						},
 						"test2": {
-							MType: entity.Counter,
+							MType: model.Counter,
 							ID:    "test2",
 							Delta: int64Ptr(3),
 						},
@@ -153,9 +153,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 		},
 		{
 			name: "add exist counter metric",
-			storage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-				entity.Counter: {"test1": {
-					MType: entity.Counter,
+			storage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+				model.Counter: {"test1": {
+					MType: model.Counter,
 					ID:    "test1",
 					Delta: int64Ptr(2),
 				}},
@@ -164,9 +164,9 @@ func TestMetricUpdateHandler(t *testing.T) {
 				code:     http.StatusOK,
 				request:  "/update/counter/test1/3",
 				response: "",
-				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]entity.Metric{
-					entity.Counter: {"test1": {
-						MType: entity.Counter,
+				expectedStorage: storage.NewMemStorageWithMetrics(map[string]map[string]model.Metric{
+					model.Counter: {"test1": {
+						MType: model.Counter,
 						ID:    "test1",
 						Delta: int64Ptr(5),
 					}},

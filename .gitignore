@@ -33,3 +33,6 @@ server.log
 
 # tmp dir
 tmp
+
+# test migrations
+cmd/server/migrations
